@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# to initially encrypt a new backup drive, see the comment at the top
+#   of the 'mkfs' action in snapback
+
+# =============================================================================
+
+our_name=$(basename $0)
+ warn() { echo -e "\n$our_name: $*\n" >&2; return 1; }
+abort() { warn "$*"; exit 1; }
+
+source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
+
+# udev may not provide much of a PATH: https://unix.stackexchange.com/a/99073
+PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+Usage="\
+Usage: $our_name device mount-point
+   Run 'cryptsetup open' on device, using FS_label (derived from mount-point)
+      as name; then mount decrypted device.  If mount-point is not
+      an absolute path, call '$backup_cmd' to get the mount-point.
+   This script is called from a udev rule in /etc/snapcrypt/drives.rules .
+
+     Common options:
+	-d: Debug shell script (don't run commands, just show them): simulation
+	-t: Trace shell script (show commands as they execute)
+	-h: show this Help message"
+
+Run= Trace= trace_opt= debug_opt=
+while getopts "dth" arg
+    do  case $arg in
+	   ( d ) Run=echo       debug_opt=-d ;; # put $Run before 'active' cmds
+	   ( t ) Trace="set -x" trace_opt=-t ;;
+	   ( h ) echo  "$Usage"; exit 0 ;;
+	   ( * ) abort "$Usage" ;;
+	esac
+done
+let OPTIND=$OPTIND-1
+shift $OPTIND
+unset arg
+
+[[ -n $Trace && -n $Run ]] && Run=:
+
+# =============================================================================
+
+[[ $# == 2 ]] || abort "$Usage"
+raw_device=$1  mount_dir=$2
+
+# -----------------------------------------------------------------------------
+
+[[ $raw_device == /dev/* ]] || raw_device=/dev/$raw_device
+[[ -b $raw_device ]] || abort "$raw_device is not a block device"
+
+[[ $mount_dir == /* ]] || mount_dir=$($backup_cmd drive $mount_dir)
+[[ $mount_dir ]] || exit 1
+
+label=${mount_dir#/}
+label=${label//\//_}			# turn '/' into '_'
+
+# -----------------------------------------------------------------------------
+
+$Trace
+
+decrypted_device=/dev/mapper/$label
+[[ -b $decrypted_device ]] ||
+$Run sudo cryptsetup open \
+   --key-file $backup_key_file --type luks $raw_device $label ||
+	abort "'cryptsetup open' failed, status=$?"
+[[ -b $decrypted_device ]] ||
+    abort "opened encrypted device, but can't find $decrypted_device"
+
+$Run sudo mkdir -p $mount_dir
+[[ $backup_FS_type == ext[2-9] ]] &&   options=nosuid,nodev,relatime &&
+$Run sudo e2label $decrypted_device $label # already labeled, unless new
+$Run sudo mount -t $backup_FS_type -o $options $decrypted_device $mount_dir ||
+   abort "couldn't mount decrypted device; see '$backup_cmd -d init-backup'"

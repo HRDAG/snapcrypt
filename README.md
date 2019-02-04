@@ -1,2 +1,2 @@
 # snapcrypt
-encrypted snapshot backups to external hard drives with LUKS
+simple setup to create/manage LUKS encrypted USB drives (e.g. for snapback)

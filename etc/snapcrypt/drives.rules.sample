@@ -1,0 +1,23 @@
+
+#############################################################################
+# udev rules for decrypting and mounting plugged-in backup drives.
+# This file typically symlinked to /etc/udev/rules.d/USB-backup-drives.rules
+#############################################################################
+
+# https://linuxconfig.org/tutorial-on-how-to-write-basic-udev-rules-in-linux
+# https://wiki.debian.org/udev
+# https://unix.stackexchange.com/questions/28548/how-to-run-custom-scripts-upon-usb-device-plug-in/28711#28711
+# https://ubuntuforums.org/showthread.php?t=1290438
+
+# see the comment at the top of the "snapback mkfs" action; here's the TL;DR:
+#
+# To find device for drive that was just plugged in, run: ls -lt /dev/sd*[!0-9]
+# Make rule (change dev=): dev=/dev/sdf; udevadm info $dev | fgrep SERIAL_SHORT
+# Test rule: udevadm test $(udevadm info $dev | sed -n 's/^P: //p') |& tail -n1
+
+# udev puts the basename of the raw-device (which matched KERNEL) into %k
+ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="575846314536354556544A45",\
+  RUN+="/usr/local/sbin/open-backup %k A"
+
+ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="57585831453735354D305452",\
+  RUN+="/usr/local/sbin/open-backup %k B"

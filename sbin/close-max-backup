@@ -1,0 +1,91 @@
+#!/bin/bash
+
+our_name=$(basename $0)
+ warn() { echo -e "\n$our_name: $*\n" >&2; return 1; }
+abort() { warn "$*"; exit 1; }
+
+source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
+
+Usage="\
+Usage: $our_name [mount-point]
+   If no arguments or mount-point not an absolute path,
+   call 'snapback' to figure out what to do.
+
+     Common options:
+	-d: Debug shell script (don't run commands, just show them): simulation
+	-t: Trace shell script (show commands as they execute)
+	-h: show this Help message"
+
+Run= Trace= trace_opt= debug_opt=
+our_opts=
+while getopts "dth" arg
+    do	our_opts="$our_opts -$arg"
+	case $arg in
+	   ( d ) Run=echo       debug_opt=-d ;; # put $Run before 'active' cmds
+	   ( t ) Trace="set -x" trace_opt=-t ;;
+	   ( h ) echo  "$Usage"; exit 0 ;;
+	   ( * ) abort "$Usage" ;;
+	esac
+done
+let OPTIND=$OPTIND-1
+shift $OPTIND
+unset arg
+
+readonly our_opts=${our_opts# }
+
+drive=${1-}
+
+# -----------------------------------------------------------------------------
+
+if [[ $# == 0 || $1 != /* ]]
+   then drive=$(snapback max-backup ${1-})
+	[[ $drive ]] || exit 1
+elif [[ $# != 1 ]]
+     then abort "$Usage"
+fi
+
+label=${drive#/}
+label=${label//\//_}			# turn '/' into '_'
+
+# ---------------------------------
+
+if [[ -b /dev/mapper/$label ]]
+   then name=$label
+   else for prefix in ${old_crypt_name_prefixes-}
+	    do	name=$prefix$backup_name
+		[[ -b /dev/mapper/$name ]] && break
+		name=
+	done
+	[[ $label == backup_Z ]] && name=$label # for testing
+fi
+
+[[ ${name-} ]] || abort "can't find encryption 'name' for $drive"
+
+# -----------------------------------------------------------------------------
+
+$Trace
+
+[[ ! $(which snapback) ]] ||
+snapback has-new-snapshots $drive || exit $?
+
+echo "unmounting $drive, can take minutes ..."
+[[ $Run ]] ||
+snapback $our_opts umount $drive &> /dev/null || {
+
+if [[ -d $drive/lost+found ]]
+   then $Run sudo umount $drive
+	status=$?
+	if [[ $status != 0 ]]
+	   then echo -e "\numount failed with status=$status"
+		cmd="fuser -mv $drive |& sort -k4"
+		echo -e "\n==> $cmd <==\n"
+		eval "sudo $cmd" | fgrep -v -e ' kernel mount '
+		echo -e "\nTo kill processes: sudo fuser -k -9 -M $drive\n"
+		exit $status
+	fi
+fi
+}
+
+echo "encrypting $drive (assume name=$name) ..."
+$Run sudo cryptsetup close $name && echo "Success!" ||
+  abort "'cryptsetup close' failed with status=$?"
