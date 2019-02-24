@@ -1,5 +1,2 @@
 # Used in open-backup .
-readonly backup_key_file=/etc/snapcrypt/keys/keyfile.bin
-
-# snapcrypt and snapback use this for labeling and mounting
-readonly FS_type=ext4
+readonly drive_key_file=/etc/snapcrypt/keys/keyfile.bin

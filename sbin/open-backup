@@ -1,15 +1,15 @@
-#!/bin/bash
+#! /usr/bin/env bash
 
 # to initially encrypt a new backup drive, see the comment at the top
 #   of the 'mkfs' action in snapback
 
 # =============================================================================
 
-our_name=$(basename $0)
- warn() { echo -e "\n$our_name: $*\n" >&2; return 1; }
-abort() { warn "$*"; exit 1; }
+# search for '####' in libsnap.sh to see environment and coding conventions
+source libsnap.sh || exit 1
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
+source  /etc/snapback/configure.sh &> /dev/null # optional: *mount_options
 
 # udev may not provide much of a PATH: https://unix.stackexchange.com/a/99073
 PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -18,7 +18,7 @@ Usage="\
 Usage: $our_name device mount-point
    Run 'cryptsetup open' on device, using FS_label (derived from mount-point)
       as name; then mount decrypted device.  If mount-point is not
-      an absolute path, call '$backup_cmd' to get the mount-point.
+      an absolute path, call 'snapback' to get the mount-point.
    This script is called from a udev rule in /etc/snapcrypt/drives.rules .
 
      Common options:
@@ -51,7 +51,7 @@ raw_device=$1  mount_dir=$2
 [[ $raw_device == /dev/* ]] || raw_device=/dev/$raw_device
 [[ -b $raw_device ]] || abort "$raw_device is not a block device"
 
-[[ $mount_dir == /* ]] || mount_dir=$($backup_cmd drive $mount_dir)
+[[ $mount_dir == /* ]] || mount_dir=$(snapback drive $mount_dir)
 [[ $mount_dir ]] || exit 1
 
 label=${mount_dir#/}
@@ -64,13 +64,24 @@ $Trace
 decrypted_device=/dev/mapper/$label
 [[ -b $decrypted_device ]] ||
 $Run sudo cryptsetup open \
-   --key-file $backup_key_file --type luks $raw_device $label ||
+   --key-file $drive_key_file --type luks $raw_device $label ||
 	abort "'cryptsetup open' failed, status=$?"
 [[ -b $decrypted_device ]] ||
     abort "opened encrypted device, but can't find $decrypted_device"
 
 $Run sudo mkdir -p $mount_dir
-[[ $backup_FS_type == ext[2-9] ]] &&   options=nosuid,nodev,relatime &&
+
+set_FS_type___from_path $decrypted_device
+
+[[ $FS_type == ext[2-9] ]] &&
 $Run sudo e2label $decrypted_device $label # already labeled, unless new
-$Run sudo mount -t $backup_FS_type -o $options $decrypted_device $mount_dir ||
-   abort "couldn't mount decrypted device; see '$backup_cmd -d init-backup'"
+
+mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
+case $FS_type in
+    ( ext4 )
+	mount_options=$mount_options,${ext4_mount_options:-journal_checksum} ;;
+    ( xfs )
+	mount_options=$mount_options,${xfs_mount_options:-logbsize=256k} ;;
+esac
+$Run sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
+   abort "couldn't mount decrypted device; see 'snapback -d init-drive'"

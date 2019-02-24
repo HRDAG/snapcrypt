@@ -1,8 +1,7 @@
-#!/bin/bash
+#! /usr/bin/env bash
 
-our_name=$(basename $0)
- warn() { echo -e "\n$our_name: $*\n" >&2; return 1; }
-abort() { warn "$*"; exit 1; }
+# search for '####' in libsnap.sh to see environment and coding conventions
+source libsnap.sh || exit 1
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
 
@@ -38,7 +37,7 @@ drive=${1-}
 # -----------------------------------------------------------------------------
 
 if [[ $# == 0 || $1 != /* ]]
-   then drive=$(snapback max-backup ${1-})
+   then drive=$(snapback max-drive ${1-})
 	[[ $drive ]] || exit 1
 elif [[ $# != 1 ]]
      then abort "$Usage"
@@ -52,7 +51,7 @@ label=${label//\//_}			# turn '/' into '_'
 if [[ -b /dev/mapper/$label ]]
    then name=$label
    else for prefix in ${old_crypt_name_prefixes-}
-	    do	name=$prefix$backup_name
+	    do	name=$prefix$drive_name
 		[[ -b /dev/mapper/$name ]] && break
 		name=
 	done
