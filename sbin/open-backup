@@ -26,10 +26,10 @@ Usage: $our_name device mount-point
 	-t: Trace shell script (show commands as they execute)
 	-h: show this Help message"
 
-Run= Trace= trace_opt= debug_opt=
+IfRun= Trace= trace_opt= debug_opt=
 while getopts "dth" arg
     do  case $arg in
-	   ( d ) Run=echo       debug_opt=-d ;; # put $Run before 'active' cmds
+	   ( d ) IfRun=echo     debug_opt=-d ;; # $IfRun prevents side-effects
 	   ( t ) Trace="set -x" trace_opt=-t ;;
 	   ( h ) echo  "$Usage"; exit 0 ;;
 	   ( * ) abort "$Usage" ;;
@@ -39,7 +39,7 @@ let OPTIND=$OPTIND-1
 shift $OPTIND
 unset arg
 
-[[ -n $Trace && -n $Run ]] && Run=:
+[[ -n $Trace && -n $IfRun ]] && IfRun=:
 
 # =============================================================================
 
@@ -54,27 +54,26 @@ raw_device=$1  mount_dir=$2
 [[ $mount_dir == /* ]] || mount_dir=$(snapback drive $mount_dir)
 [[ $mount_dir ]] || exit 1
 
-label=${mount_dir#/}
-label=${label//\//_}			# turn '/' into '_'
+set_FS_label___from_mount_dir $mount_dir
 
 # -----------------------------------------------------------------------------
 
 $Trace
 
-decrypted_device=/dev/mapper/$label
+decrypted_device=/dev/mapper/$FS_label
 [[ -b $decrypted_device ]] ||
-$Run sudo cryptsetup open \
-   --key-file $drive_key_file --type luks $raw_device $label ||
+$IfRun sudo cryptsetup open \
+   --key-file $drive_key_file --type luks $raw_device $FS_label ||
 	abort "'cryptsetup open' failed, status=$?"
 [[ -b $decrypted_device ]] ||
     abort "opened encrypted device, but can't find $decrypted_device"
 
-$Run sudo mkdir -p $mount_dir
+$IfRun sudo mkdir -p $mount_dir
 
 set_FS_type___from_path $decrypted_device
 
 [[ $FS_type == ext[2-9] ]] &&
-$Run sudo e2label $decrypted_device $label # already labeled, unless new
+$IfRun sudo e2label $decrypted_device $FS_label # already labeled, unless new
 
 mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
 case $FS_type in
@@ -83,5 +82,5 @@ case $FS_type in
     ( xfs )
 	mount_options=$mount_options,${xfs_mount_options:-logbsize=256k} ;;
 esac
-$Run sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
+$IfRun sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
    abort "couldn't mount decrypted device; see 'snapback -d init-drive'"

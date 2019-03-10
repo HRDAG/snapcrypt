@@ -15,12 +15,12 @@ Usage: $our_name [mount-point]
 	-t: Trace shell script (show commands as they execute)
 	-h: show this Help message"
 
-Run= Trace= trace_opt= debug_opt=
+IfRun= Trace= trace_opt= debug_opt=
 our_opts=
 while getopts "dth" arg
     do	our_opts="$our_opts -$arg"
 	case $arg in
-	   ( d ) Run=echo       debug_opt=-d ;; # put $Run before 'active' cmds
+	   ( d ) IfRun=echo     debug_opt=-d ;; # $IfRun prevents side-effects
 	   ( t ) Trace="set -x" trace_opt=-t ;;
 	   ( h ) echo  "$Usage"; exit 0 ;;
 	   ( * ) abort "$Usage" ;;
@@ -43,19 +43,18 @@ elif [[ $# != 1 ]]
      then abort "$Usage"
 fi
 
-label=${drive#/}
-label=${label//\//_}			# turn '/' into '_'
+set_FS_label___from_mount_dir $drive
 
 # ---------------------------------
 
-if [[ -b /dev/mapper/$label ]]
-   then name=$label
+if [[ -b /dev/mapper/$FS_label ]]
+   then name=$FS_label
    else for prefix in ${old_crypt_name_prefixes-}
 	    do	name=$prefix$drive_name
 		[[ -b /dev/mapper/$name ]] && break
 		name=
 	done
-	[[ $label == backup_Z ]] && name=$label # for testing
+	[[ $FS_label == backup_Z ]] && name=$FS_label # for testing
 fi
 
 [[ ${name-} ]] || abort "can't find encryption 'name' for $drive"
@@ -68,11 +67,11 @@ $Trace
 snapback has-new-snapshots $drive || exit $?
 
 echo "unmounting $drive, can take minutes ..."
-[[ $Run ]] ||
+[[ $IfRun ]] ||
 snapback $our_opts umount $drive &> /dev/null || {
 
 if [[ -d $drive/lost+found ]]
-   then $Run sudo umount $drive
+   then $IfRun sudo umount $drive
 	status=$?
 	if [[ $status != 0 ]]
 	   then echo -e "\numount failed with status=$status"
@@ -86,5 +85,5 @@ fi
 }
 
 echo "encrypting $drive (assume name=$name) ..."
-$Run sudo cryptsetup close $name && echo "Success!" ||
+$IfRun sudo cryptsetup close $name && echo "Success!" ||
   abort "'cryptsetup close' failed with status=$?"
