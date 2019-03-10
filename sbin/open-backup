@@ -72,9 +72,6 @@ $IfRun sudo mkdir -p $mount_dir
 
 set_FS_type___from_path $decrypted_device
 
-[[ $FS_type == ext[2-9] ]] &&
-$IfRun sudo e2label $decrypted_device $FS_label # already labeled, unless new
-
 mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
 case $FS_type in
     ( ext4 )
