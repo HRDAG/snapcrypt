@@ -88,6 +88,7 @@ case $FS_type in
 	mount_options=$mount_options,${xfs_mount_options:-logbsize=256k}
 	set -- /dev/mapper/*${FS_label}_log
 	[[ -b $1 ]] && mount_options=$mount_options,logdev=$1 ;;
+    ( * ) abort "don't know how to mount filesystem of type '$FS_type'"
 esac
 $IfRun sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
    abort "couldn't mount decrypted device; see 'snapback -d init-drive'"
