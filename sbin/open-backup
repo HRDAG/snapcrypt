@@ -53,13 +53,17 @@ raw_device=$1  mount_dir=$2
 
 # -----------------------------------------------------------------------------
 
-[[ $raw_device == /dev/* ]] || raw_device=/dev/$raw_device
-[[ -b $raw_device ]] || abort "$raw_device is not a block device"
-
 [[ $mount_dir == /* ]] || mount_dir=$(snapback drive $mount_dir)
 [[ $mount_dir ]] || exit 1
 
 set_FS_label___from_mount_dir $mount_dir
+
+file_for_logging=$log_dir/$FS_label.log
+
+[[ $raw_device == /dev/* ]] || raw_device=/dev/$raw_device
+[[ -b $raw_device ]] || abort "$raw_device is not a block device"
+
+log_msg_prefix=' $raw_device'
 
 # -----------------------------------------------------------------------------
 

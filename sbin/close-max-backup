@@ -45,6 +45,8 @@ fi
 
 set_FS_label___from_mount_dir $drive
 
+file_for_logging=$log_dir/$FS_label.log
+
 # ---------------------------------
 
 if [[ -b /dev/mapper/$FS_label ]]
