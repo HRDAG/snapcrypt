@@ -5,11 +5,16 @@
 
 # =============================================================================
 
+# libsnap.sh has these funcs/vars: our_name, abort,
+# set_FS_label___from_mount_dir, set_FS_type___from_path
+#
 # search for '####' in libsnap.sh to see environment and coding conventions
 source libsnap.sh || exit 1
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
-source  /etc/snapback/configure.sh &> /dev/null # optional: *mount_options
+
+# this sets common_mount_options, extN_mount_options, xfs_mount_options
+source  /etc/snapback/configure.sh &> /dev/null # optional
 
 # udev may not provide much of a PATH: https://unix.stackexchange.com/a/99073
 PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -74,8 +79,11 @@ set_FS_type___from_path $decrypted_device
 
 mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
 case $FS_type in
-    ( ext4 )
-	mount_options=$mount_options,${ext4_mount_options:-journal_checksum} ;;
+    ( ext[1-3] )
+	[[ $extN_mount_options ]] &&
+	mount_options=$mount_options,$extN_mount_options ;;
+    ( ext[4-9] )
+	mount_options=$mount_options,${extN_mount_options:-journal_checksum} ;;
     ( xfs )
 	mount_options=$mount_options,${xfs_mount_options:-logbsize=256k}
 	set -- /dev/mapper/*${FS_label}_log
