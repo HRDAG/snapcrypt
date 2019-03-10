@@ -80,7 +80,9 @@ case $FS_type in
     ( ext4 )
 	mount_options=$mount_options,${ext4_mount_options:-journal_checksum} ;;
     ( xfs )
-	mount_options=$mount_options,${xfs_mount_options:-logbsize=256k} ;;
+	mount_options=$mount_options,${xfs_mount_options:-logbsize=256k}
+	set -- /dev/mapper/*${FS_label}_log
+	[[ -b $1 ]] && mount_options=$mount_options,logdev=$1 ;;
 esac
 $IfRun sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
    abort "couldn't mount decrypted device; see 'snapback -d init-drive'"
