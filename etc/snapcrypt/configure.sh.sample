@@ -1,4 +1,4 @@
 # Used in open-backup .
 readonly drive_key_file=/etc/snapcrypt/keys/keyfile.bin
 
-readonly logdir=/var/log/$our_name
+readonly log_dir=/var/log/snapcrypt
