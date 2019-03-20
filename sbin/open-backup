@@ -94,5 +94,6 @@ case $FS_type in
 	[[ -b $1 ]] && mount_options=$mount_options,logdev=$1 ;;
     ( * ) abort "don't know how to mount filesystem of type '$FS_type'"
 esac
-$IfRun sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
-   abort "couldn't mount decrypted device; see 'snapback -d init-drive'"
+cmd="
+$IfRun sudo mount -t $FS_type -o $mount_options $decrypted_device $mount_dir"
+$cmd || abort "'$cmd' returned $?"
