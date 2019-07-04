@@ -59,7 +59,8 @@ set-FS_label-from-mount_dir $mount_dir
 
 file_for_logging=$log_dir/$FS_label.log
 
-[[ $raw_device == /dev/* ]] || raw_device=/dev/$raw_device
+[[ $raw_device == /dev/*  ]] || raw_device=/dev/$raw_device
+[[ -b $raw_device || -t 2 ]] || $IfRun sleep 15
 [[ -b $raw_device ]] || abort "$raw_device is not a block device"
 
 log_msg_prefix=' $raw_device'

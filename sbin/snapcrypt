@@ -1,0 +1,77 @@
+#! /usr/bin/env bash
+
+# the other commands will eventually be subsumed into this command
+
+# libsnap.sh has these funcs/vars: our_name, abort,
+# set_FS_label___from_mount_dir, set_FS_type___from_path
+#
+# search for '####' in libsnap.sh to see environment and coding conventions
+source libsnap.sh || exit 1
+
+source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
+readonly udev_rules_file=/etc/snapcrypt/drives.rules
+[[ -s $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
+
+# this sets common_mount_options, extN_mount_options, xfs_mount_options
+source  /etc/snapback/configure.sh &> /dev/null # optional
+
+# udev may not provide much of a PATH: https://unix.stackexchange.com/a/99073
+PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+Usage="\
+Usage: $our_name [options] action [args]
+  Current actions are:
+     list-drives: show the encrypted drives
+
+     Common options:
+	-d: Debug shell script (don't run commands, just show them): simulation
+	-t: Trace shell script (show commands as they execute)
+	-h: show this Help message
+"
+
+IfRun= Trace= trace_opt= debug_opt=
+while getopts "dth" arg
+    do  case $arg in
+	   ( d ) IfRun=echo     debug_opt=-d ;; # $IfRun prevents side-effects
+	   ( t ) Trace="set -x" trace_opt=-t ;;
+	   ( h ) echo  "$Usage"; exit 0 ;;
+	   ( * ) abort "$Usage" ;;
+	esac
+done
+let OPTIND=$OPTIND-1
+shift $OPTIND
+unset arg
+
+[[ -n $Trace && -n $IfRun ]] && IfRun=:
+
+# =============================================================================
+
+[[ $# != 0 ]] || abort "specify an action to perform\n$Usage"
+
+action=$1; shift
+_our_name="$our_name"
+ our_name="$our_name $action"
+undo_action_abbrev() { action=$1 our_name="$_our_name $1" ; }
+
+# ---------------------------------
+
+process_action() {
+
+stack_frame_to_show=0		# show line-number inside the 'case' statement
+
+case $action in
+   # list-drives: show the encrypted drives
+   ( l*s* ) undo_action_abbrev list-drives
+	for dev in /dev/sd*[!0-9]
+	    do	serial=$(udevadm info $dev | sed -n 's/.*SERIAL_SHORT=//p')
+		set -- $(fgrep -A 1 -w $serial $udev_rules_file)
+		[[ $# != 0 ]] || continue
+		drive=${!#}
+		drive=${drive%\"}
+		echo "$dev decrypts to drive $drive"
+	done
+	;;
+esac
+}
+
+process_action "$@"
