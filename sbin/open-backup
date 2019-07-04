@@ -5,10 +5,9 @@
 
 # =============================================================================
 
-# libsnap.sh has these funcs/vars: our_name, abort,
-# set_FS_label___from_mount_dir, set_FS_type___from_path
-#
 # search for '####' in libsnap.sh to see environment and coding conventions
+# libsnap.sh has these functions/variables: our_name, abort,
+# set-FS_label-from-mount_dir, set-FS_type-from-path
 source libsnap.sh || exit 1
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
@@ -56,7 +55,7 @@ raw_device=$1  mount_dir=$2
 [[ $mount_dir == /* ]] || mount_dir=$(snapback drive $mount_dir)
 [[ $mount_dir ]] || exit 1
 
-set_FS_label___from_mount_dir $mount_dir
+set-FS_label-from-mount_dir $mount_dir
 
 file_for_logging=$log_dir/$FS_label.log
 
@@ -79,7 +78,7 @@ $IfRun sudo cryptsetup open \
 
 $IfRun sudo mkdir -p $mount_dir
 
-set_FS_type___from_path $decrypted_device
+set-FS_type-from-path $decrypted_device
 
 mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
 case $FS_type in
