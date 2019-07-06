@@ -1,9 +1,11 @@
 #! /usr/bin/env bash
 
 # search for '####' in libsnap.sh to see environment and coding conventions
-# libsnap.sh has these functions/variables: our_name, abort,
-# set-FS_label-from-mount_dir
 source libsnap.sh || exit 1
+# We use these constants from libsnap.sh
+readonly our_name abort
+# We use these functions from libsnap.sh
+readonly -f set-FS_label--from-mount_dir
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
 
@@ -45,7 +47,7 @@ elif [[ $# != 1 ]]
      then abort "$Usage"
 fi
 
-set-FS_label-from-mount_dir $drive
+set-FS_label--from-mount_dir $drive
 
 file_for_logging=$log_dir/$FS_label.log
 

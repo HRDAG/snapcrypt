@@ -2,11 +2,12 @@
 
 # the other commands will eventually be subsumed into this command
 
-# libsnap.sh has these funcs/vars: our_name, abort,
-# set_FS_label___from_mount_dir, set_FS_type___from_path
-#
 # search for '####' in libsnap.sh to see environment and coding conventions
 source libsnap.sh || exit 1
+# We use these constants from libsnap.sh (and change $our_name)
+readonly our_path
+# We use these functions from libsnap.sh
+readonly -f abort
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
 readonly udev_rules_file=/etc/snapcrypt/drives.rules
@@ -59,6 +60,8 @@ process_action() {
 
 stack_frame_to_show=0		# show line-number inside the 'case' statement
 
+$Trace
+
 case $action in
    # list-drives: show the encrypted drives
    ( l*s* ) undo_action_abbrev list-drives
@@ -69,6 +72,15 @@ case $action in
 		drive=${!#}
 		drive=${drive%\"}
 		echo "$dev decrypts to drive $drive"
+	done
+	;;
+    ( o* ) undo_action_abbrev open
+	[[ ! ${1-} || $1 == all ]] || abort "can only 'open all' so far"
+	$our_path list-drives |
+	while read dev decrypts to drive drive_name
+	   do	df --output=target --no-sync -x devtmpfs -x tmpfs |
+		   grep -q "${drive_dir_prefix-\b}$drive_name$" && continue
+		$IfRun open-backup $dev $drive_name
 	done
 	;;
 esac
