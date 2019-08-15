@@ -6,8 +6,9 @@
 source libsnap.sh || exit 1
 # We use these constants from libsnap.sh (and change $our_name)
 readonly our_path
+# We use libsnap.sh variables: file_for_logging log_msg_prefix
 # We use these functions from libsnap.sh
-readonly -f abort
+readonly -f abort set-FS_label--from-mount_dir set-FS_type--from-path
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
 readonly udev_rules_file=/etc/snapcrypt/drives.rules
@@ -24,6 +25,15 @@ Usage: $our_name [options] action [args]
   Current actions are:
      list-drives: show the encrypted drives
 
+     open device mount-point: run 'cryptsetup open' on device,
+	using FS_label (derived from mount-point) as name; then mount
+	the decrypted device.  If mount-point is not an absolute path,
+	call 'snapback' to get the mount-point.  [This action is run from
+	a udev rule in /etc/snapcrypt/drives.rules]
+
+     close mount-point: if mount-point is a relative path, call 'snapback'
+         to figure out what to do (if 'max', choose busiest backup; also 'all')
+
      Common options:
 	-d: Debug shell script (don't run commands, just show them): simulation
 	-t: Trace shell script (show commands as they execute)
@@ -31,8 +41,10 @@ Usage: $our_name [options] action [args]
 "
 
 IfRun= Trace= trace_opt= debug_opt=
+our_opts=
 while getopts "dth" arg
-    do  case $arg in
+    do	our_opts+="-$arg ${OPTARG-} "
+	case $arg in
 	   ( d ) IfRun=echo     debug_opt=-d ;; # $IfRun prevents side-effects
 	   ( t ) Trace="set -x" trace_opt=-t ;;
 	   ( h ) echo  "$Usage"; exit 0 ;;
@@ -43,9 +55,237 @@ let OPTIND=$OPTIND-1
 shift $OPTIND
 unset arg
 
-[[ -n $Trace && -n $IfRun ]] && IfRun=:
+[[ $Trace && $debug_opt ]] && IfRun=:
 
-# =============================================================================
+##############################################################################
+# functions
+##############################################################################
+
+list-drives() {
+
+	local dev
+	for dev in /dev/sd*
+	    do	local serial=$(udevadm info $dev |
+				sed -n 's/.*SERIAL_SHORT=//p')
+		set -- $(merged-continuation-lines $udev_rules_file |
+			     fgrep -w $serial)
+		[[ $# != 0 ]] || continue
+		local drive=${!#}
+		drive=${drive%\"}
+		echo "$dev decrypts to drive $drive"
+	done
+}
+
+# ----------------------------------------------------------------------------
+# funcctions for action 'open'
+# ----------------------------------------------------------------------------
+
+open-all-unopened-drives() {
+
+	$our_path list-drives |
+	while read dev decrypts to drive drive_name
+	   do	df --output=target --no-sync -x devtmpfs -x tmpfs |
+		   grep -q "${drive_dir_prefix-\b}$drive_name$" && continue
+		$_our_name $our_opts open $dev $drive_name
+	done
+}
+
+# ------------------------------------------------------------------
+
+set-mount_dir-FS_label-raw_device() {
+
+	[[ $mount_dir == /* ]] || mount_dir=$(snapback drive $mount_dir)
+	[[ $mount_dir ]] || exit 1
+
+	set-FS_label--from-mount_dir $mount_dir
+
+	[[ $raw_device == /dev/*  ]] || raw_device=/dev/$raw_device
+	[[ -b $raw_device || -t 2 ]] || $IfRun sleep 15
+	[[ -b $raw_device ]] || abort "$raw_device is not a block device"
+}
+
+# ---------------------------------
+
+setup-vars-for-log-and-abort() {
+
+	file_for_logging=$log_dir/$FS_label.log
+	log_msg_prefix=' $raw_device'
+}
+
+# ---------------------------------
+
+set-decrypted_device() {
+
+	decrypted_device=/dev/mapper/$FS_label
+
+	[[ -b $decrypted_device ]] ||
+	$IfRun sudo cryptsetup open \
+	   --key-file $drive_key_file --type luks $raw_device $FS_label ||
+		abort "'cryptsetup open' failed, status=$?"
+
+	[[ -b $decrypted_device ]] ||
+	    abort "opened encrypted device, but can't find $decrypted_device"
+}
+
+# ---------------------------------
+
+set-mount_options() {
+	local FS_type=$1
+
+	mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
+
+	local FS_opts=		   # grab opts from /etc/snapback/configure.sh
+	case $FS_type in
+	    ( ext[1-3] ) FS_opts=${extN_mount_options-} ;;
+	    ( ext[4-9] ) FS_opts=${extN_mount_options:-journal_checksum} ;;
+	    ( xfs )	 FS_opts=${xfs_mount_options:-logbsize=256k}
+			 set -- /dev/mapper/*${FS_label}_log
+			 [[ -b $1 ]] && FS_opts+=",logdev=$1" ;;
+	    ( * ) abort "don't know how to mount filesystem of type '$FS_type'"
+	esac
+	[[ $FS_opts ]] && mount_options+=",$FS_opts"
+}
+
+# ---------------------------------
+
+open() {
+	local raw_device=$1 mount_dir=$2
+
+	set-mount_dir-FS_label-raw_device
+
+	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
+
+	setup-vars-for-log-and-abort
+
+	set-decrypted_device
+
+	RunCmd sudo mkdir -p $mount_dir
+
+	set-FS_type--from-path $decrypted_device
+	set-mount_options $FS_type
+
+	RunCmd sudo \
+	mount -t $FS_type -o $mount_options $decrypted_device $mount_dir
+}
+
+# ----------------------------------------------------------------------------
+# funcctions for action 'close'
+# ----------------------------------------------------------------------------
+
+close-all-opened-drives() {
+	
+	[[ ${drive_dir_prefix-} ]] || 
+	    abort-function "only works when using snapback"
+
+	df --output=target --no-sync -x devtmpfs -x tmpfs |
+	   grep "^$drive_dir_prefix" |
+	while read mount_point
+	   do	$_our_name $our_opts close -q $mount_point
+	done
+}
+
+# ----------------------------------------------------------------------------
+
+set-mount_dir() {
+	local _mount_dir=$1
+	mount_dir=$_mount_dir
+
+	case $mount_dir in
+	    ( /*  ) ;;
+	    ( max ) mount_dir=$(snapback max-drive) ;;
+	    (  *  ) mount_dir=$(snapback     drive $mount_dir) ;;
+	esac
+
+	[[ $mount_dir && -d $mount_dir ]] || 
+	    abort "can't find mount directory for '$_mount_dir'"
+}
+
+# ---------------------------------
+
+set-name--from-FS_label() {
+	local FS_label=$1
+
+	[[ -b /dev/mapper/$FS_label ]] && name=$FS_label && return
+
+	local prefix
+	for prefix in ${old_crypt_name_prefixes-}
+	    do	name=$prefix$drive_name
+		[[ -b /dev/mapper/$name ]] && break
+		name=
+	done
+	[[ $FS_label == backup_Z ]] && name=$FS_label # for testing
+
+	[[ ${name-} ]]
+}
+
+# ---------------------------------
+
+assert-drive-has-new-backups() {
+	local mount_dir=$1
+
+	[[ ! $(which snapback) ]] ||
+	snapback has-new-snapshots $mount_dir || exit $?
+}
+
+# ---------------------------------
+	
+unmount-drive() {
+	local mount_dir=$1
+
+	echo "unmounting $mount_dir, can take minutes ..."
+
+	[[ $debug_opt ]] ||
+	    { snapback $our_opts umount $drive &> /dev/null && return; }
+
+	is-an-FS-device-mounted $mount_dir || return
+
+	$IfRun sudo umount $mount_dir
+	local status=$?
+	if [[ $status != 0 ]]
+	   then echo -e "\numount failed with status=$status"
+		cmd="fuser -mv $mount_dir |& sort -k4"
+		echo -e "\n==> $cmd <==\n"
+		eval "sudo $cmd" | fgrep -v -e ' kernel mount '
+		echo -e "\nTo kill processes: sudo fuser -k -9 -M $mount_dir\n"
+		exit $status
+	fi
+}
+
+# ---------------------------------
+
+encrypt-drive() {
+	local name=$1
+
+	echo "encrypting ${mount_dir-} (assuming name=$name) ..."
+	RunCmd sudo cryptsetup close $name && echo "Success!"
+}
+
+# ---------------------------------
+
+close() {
+	[[ $1 == -q ]] && { local is_quiet=$true; shift; } || local is_quiet=
+
+	set-mount_dir $1
+
+	set-FS_label--from-mount_dir $mount_dir
+
+	setup-vars-for-log-and-abort
+
+	if ! set-name--from-FS_label $FS_label
+	   then [[ $is_quiet ]] && return
+		abort "can't find encryption 'name' for $FS_label"
+	fi
+
+	assert-drive-has-new-backups $mount_dir
+
+	unmount-drive $mount_dir
+
+	encrypt-drive $name
+}
+
+##############################################################################
+# main
+##############################################################################
 
 [[ $# != 0 ]] || abort "specify an action to perform\n$Usage"
 
@@ -65,23 +305,25 @@ $Trace
 case $action in
    # list-drives: show the encrypted drives
    ( l*s* ) undo_action_abbrev list-drives
-	for dev in /dev/sd*[!0-9]
-	    do	serial=$(udevadm info $dev | sed -n 's/.*SERIAL_SHORT=//p')
-		set -- $(fgrep -A 1 -w $serial $udev_rules_file)
-		[[ $# != 0 ]] || continue
-		drive=${!#}
-		drive=${drive%\"}
-		echo "$dev decrypts to drive $drive"
-	done
+	list-drives "$@"
 	;;
+    # open device mount-point: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
-	[[ ! ${1-} || $1 == all ]] || abort "can only 'open all' so far"
-	$our_path list-drives |
-	while read dev decrypts to drive drive_name
-	   do	df --output=target --no-sync -x devtmpfs -x tmpfs |
-		   grep -q "${drive_dir_prefix-\b}$drive_name$" && continue
-		$IfRun open-backup $dev $drive_name
-	done
+	if [[ $* == all ]]
+	   then open-all-unopened-drives
+	elif [[ $# == 2 ]]
+	   then open "$@"
+	   else abort-with-action-Usage
+	fi
+	;;
+    # close mount-point: if mount-point is a relative path, call 'snapback'
+    ( c* ) undo_action_abbrev close
+	if [[ $* == all ]]
+	   then close-all-opened-drives
+	elif [[ $# == [12] ]]
+	   then close "$@"
+	   else abort-with-action-Usage
+	fi
 	;;
 esac
 }
