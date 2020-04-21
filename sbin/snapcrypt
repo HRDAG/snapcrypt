@@ -9,6 +9,7 @@ readonly our_path
 # We use libsnap.sh variables: file_for_logging log_msg_prefix
 # We use these functions from libsnap.sh
 readonly -f abort set-FS_label--from-mount_dir set-FS_type--from-path
+readonly -f merged-continuation-lines
 
 source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
 readonly udev_rules_file=/etc/snapcrypt/drives.rules
@@ -25,13 +26,13 @@ Usage: $our_name [options] action [args]
   Current actions are:
      list-drives: show the encrypted drives
 
-     open device mount-point: run 'cryptsetup open' on device,
+     open { device mount-point | all }: run 'cryptsetup open' on device,
 	using FS_label (derived from mount-point) as name; then mount
 	the decrypted device.  If mount-point is not an absolute path,
 	call 'snapback' to get the mount-point.  [This action is run from
 	a udev rule in /etc/snapcrypt/drives.rules]
 
-     close mount-point: if mount-point is a relative path, call 'snapback'
+     close {mount-point|all}: if mount-point is relative path, call 'snapback'
          to figure out what to do (if 'max', choose busiest backup; also 'all')
 
      Common options:
@@ -64,9 +65,13 @@ unset arg
 list-drives() {
 
 	local dev
-	for dev in /dev/sd*
+	for dev in /dev/sd*[!0-9]
 	    do	local serial=$(udevadm info $dev |
 				sed -n 's/.*SERIAL_SHORT=//p')
+		if [[ ! $serial ]]
+		   then warn "didn't find SERIAL_SHORT value for $dev"
+			continue
+		fi
 		set -- $(merged-continuation-lines $udev_rules_file |
 			     fgrep -w $serial)
 		[[ $# != 0 ]] || continue
@@ -307,7 +312,7 @@ case $action in
    ( l*s* ) undo_action_abbrev list-drives
 	list-drives "$@"
 	;;
-    # open device mount-point: run 'cryptsetup open' on device,
+    # open { device mount-point | all }: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
 	if [[ $* == all ]]
 	   then open-all-unopened-drives
@@ -316,7 +321,7 @@ case $action in
 	   else abort-with-action-Usage
 	fi
 	;;
-    # close mount-point: if mount-point is a relative path, call 'snapback'
+    # close {mount-point|all}: if mount-point is relative path, call 'snapback'
     ( c* ) undo_action_abbrev close
 	if [[ $* == all ]]
 	   then close-all-opened-drives
@@ -324,6 +329,9 @@ case $action in
 	   then close "$@"
 	   else abort-with-action-Usage
 	fi
+	;;
+   ( * )
+	warn "'$action' is not a recognized action, run: $_our_name -h"; exit 1
 	;;
 esac
 }
