@@ -36,7 +36,8 @@ Usage: $our_name [options] action [args]
 	a udev rule in /etc/snapcrypt/drives.rules .]  No mount if -M.
 
      close {mount-point|all}: if mount-point is relative path, call 'snapback'
-         to figure out what to do (if 'max', choose busiest backup; also 'all')
+         to figure out what to do (if 'max' or 'all', choose busiest backup);
+	 'close' is the same as 'eject'.
 
      Common options:
 	-d: Debug shell script (don't run commands, just show them): simulation
@@ -46,12 +47,12 @@ Usage: $our_name [options] action [args]
 
 IfRun= Trace= trace_opt= debug_opt=
 our_opts=
-while getopts "dth" arg
+while getopts "d t hk" arg
     do	our_opts+="-$arg ${OPTARG-} "
 	case $arg in
 	   ( d ) IfRun=echo     debug_opt=-d ;; # $IfRun prevents side-effects
 	   ( t ) Trace="set -x" trace_opt=-t ;;
-	   ( h ) echo  "$Usage"; exit 0 ;;
+	   (h|k) print-or-egrep-Usage-then-exit "$@" ;;
 	   ( * ) abort "$Usage" ;;
 	esac
 done
@@ -92,17 +93,24 @@ list-drives() {
 
 init-device() {
 	local  device=$1 name=$2
+
+	raw_device=$device
+	mount_dir=$(snapback drive $name)
+	set-mount_dir-FS_label-raw_device
+	device=$raw_device
 	[[ -b $device ]] || abort-function "$device not a block device"
 
 	fuser -m -v $device && $IfRun abort "$device is in-use"
 	[[ -s $drive_key_file ]] || abort "must create $drive_key_file"
 
 	warn "encrypting $device\n\n   be SURE you type 'YES' not 'yes' ..."
-	$IfRun sudo cryptsetup luksFormat $device $keypair ||
+	$IfRun sudo cryptsetup luksFormat $device $drive_key_file ||
 	    abort-function "cryptsetup returned $?"
 
 	warn "decrypting $device, so you can run: snapback mkfs $device $name"
-	$IfRun snapcrypt open -M $device $name
+	set-decrypted_device 		# also decrypts
+
+	warn "add rule to /etc/snapcrypt/drives.rules for $*"
 }
 
 # ----------------------------------------------------------------------------
@@ -345,7 +353,7 @@ case $action in
 	;;
     # open [-M] { device mount-point | all }: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
-	[[ ${1-} = -M ]] && { shift; do-mount=$false; } || do-mount=$true
+	[[ ${1-} = -M ]] && { shift; do_mount=$false; } || do_mount=$true
 	if [[ $* == all ]]
 	   then open-all-unopened-drives
 	elif [[ $# == 2 ]]

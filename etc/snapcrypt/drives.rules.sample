@@ -9,7 +9,7 @@
 # https://unix.stackexchange.com/questions/28548/how-to-run-custom-scripts-upon-usb-device-plug-in/28711#28711
 # https://ubuntuforums.org/showthread.php?t=1290438
 
-# see the comment at the top of the "snapback mkfs" action; here's the TL;DR:
+# see comment at the top of mkfs-backup-drive in 'snapback'; here's the TL;DR:
 #
 # To find device for drive that was just plugged in, run: ls -lt /dev/sd*[!0-9]
 # Make rule (change dev=): dev=/dev/sdf; udevadm info $dev | fgrep SERIAL_SHORT
