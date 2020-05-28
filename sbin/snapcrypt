@@ -105,12 +105,14 @@ init-device() {
 
 	warn "encrypting $device\n\n   be SURE you type 'YES' not 'yes' ..."
 	$IfRun sudo cryptsetup luksFormat $device $drive_key_file ||
-	    abort-function "cryptsetup returned $?"
+	    abort-function "cryptsetup returned $?; maybe repeat, after run:
+		sudo cryptsetup close $FS_label"
 
-	warn "decrypting $device, so you can run: snapback mkfs $device $name"
 	set-decrypted_device 		# also decrypts
+	local dev=$decrypted_device
+	warn "decrypting $device, so you can run: snapback mkfs $dev $name
 
-	warn "add rule to /etc/snapcrypt/drives.rules for $*"
+	add rule to /etc/snapcrypt/drives.rules for $*"
 }
 
 # ----------------------------------------------------------------------------
