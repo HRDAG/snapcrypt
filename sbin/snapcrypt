@@ -88,7 +88,7 @@ list-drives() {
 		   else local mount_dir=${drive_dir_prefix-}$drive
 		fi
 		set-FS_label--from-mount_dir $mount_dir
-		local dev=/dev/mapper/$FS_label dm=
+		local  dev=/dev/mapper/$FS_label    dm=
 		[[ -b $dev ]] && set-absolute_path $dev &&
 		    dm="\t# decrypted device is $dev -> $absolute_path"
 
