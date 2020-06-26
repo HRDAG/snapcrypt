@@ -17,7 +17,7 @@
 
 # udev puts the basename of the raw-device (which matched KERNEL) into %k
 ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="575846314536354556544A45",\
-  RUN+="/usr/local/sbin/open-backup %k A"
+  RUN+="/usr/local/sbin/open-backup A %k"
 
 ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="57585831453735354D305452",\
-  RUN+="/usr/local/sbin/open-backup %k B"
+  RUN+="/usr/local/sbin/open-backup B %k"
