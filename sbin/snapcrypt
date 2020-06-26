@@ -70,21 +70,30 @@ need-cmds cryptsetup fuser
 
 list-drives() {
 
-	local dev
-	for dev in /dev/sd*[!0-9]
-	    do	local serial=$(udevadm info $dev |
+	local raw_dev
+	for raw_dev in /dev/sd*[!0-9]
+	    do	local serial=$(udevadm info $raw_dev |
 				sed -n 's/.*SERIAL_SHORT=//p')
 		if [[ ! $serial ]]
-		   then warn "didn't find SERIAL_SHORT value for $dev"
+		   then warn "didn't find SERIAL_SHORT value for $raw_dev"
 			continue
 		fi
 		set -- $(merged-continuation-lines $udev_rules_file |
-			     fgrep -w $serial)
+			     sed -n "/\b$serial\b/s/%k.*//p")
 		[[ $# != 0 ]] || continue
 		local drive=${!#}
-		drive=${drive%\"}
-		echo "$dev decrypts to drive $drive"
-	done
+
+		if [[ $drive == /* ]]
+		   then local mount_dir=$drive
+		   else local mount_dir=${drive_dir_prefix-}$drive
+		fi
+		set-FS_label--from-mount_dir $mount_dir
+		local dev=/dev/mapper/$FS_label dm=
+		[[ -b $dev ]] && set-absolute_path $dev &&
+		    dm="\t# decrypted device is $dev -> $absolute_path"
+
+		echo -e "$drive $raw_dev$dm"
+	done | sort
 }
 
 # ----------------------------------------------------------------------------
