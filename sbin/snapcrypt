@@ -116,7 +116,7 @@ init-device() {
 	local LUKS2_opts="--type luks2 --sector-size 4096 --label $FS_label"
 	$IfRun sudo cryptsetup luksFormat $LUKS2_opts $device $drive_key_file||
 	    abort-function "cryptsetup returned $?; maybe repeat, after run:
-		sudo cryptsetup close $FS_label"
+		sudo cryptsetup --deferred close $FS_label"
 
 	set-decrypted_device 		# also decrypts
 	local dev=$decrypted_device
