@@ -25,7 +25,9 @@ PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Usage="\
 Usage: $our_name [options] action [args]
   Current actions are:
-     list-drives: show all encrypted drives
+     list-drives: show all encrypted drives.
+
+     status name: show detailed status of encrypted drive.
 
      init name device: setup encryption (find device with: ls -lt /dev/sd*)-
 
@@ -341,6 +343,18 @@ close() {
 	unmap-drive $name
 }
 
+# ----------------------------------------------------------------------------
+
+show-status() {
+	local name=$1
+
+	set-mount_dir $1
+
+	set-FS_label--from-mount_dir $mount_dir
+
+	sudo cryptsetup status $FS_label
+}
+
 ##############################################################################
 # main
 ##############################################################################
@@ -361,9 +375,14 @@ stack_frame_to_show=0		# show line-number inside the 'case' statement
 $Trace
 
 case $action in
-   # list-drives: show all encrypted drives
+   # list-drives: show all encrypted drives.
    ( l*s* ) undo_action_abbrev list-drives
 	list-drives "$@"
+	;;
+   # status name: show detailed status of encrypted drive.
+   ( s* ) undo_action_abbrev status
+	[[ $# == 1 ]] || abort-with-action-Usage
+	show-status "$@"
 	;;
    # init name device: setup encryption (find device with: ls -lt /dev/sd*)-
    ( init )
