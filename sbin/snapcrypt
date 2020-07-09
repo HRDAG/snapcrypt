@@ -27,7 +27,7 @@ Usage: $our_name [options] action [args]
   Current actions are:
      list-drives: show all encrypted drives
 
-     init name device: setup encryption (find device with: ls -lt /dev/sd*)
+     init name device: setup encryption (find device with: ls -lt /dev/sd*)-
 
      open [-M] { mount-point device | all }: run 'cryptsetup open' on device,
 	using FS_label (derived from mount-point) as name; then mount
@@ -35,9 +35,10 @@ Usage: $our_name [options] action [args]
 	call 'snapback' to get the mount-point.  [This action is run from
 	a udev rule in /etc/snapcrypt/drives.rules .]  No mount if -M.
 
-     close {mount-point|all}: if mount-point is relative path, call 'snapback'
-         to figure out what to do (if 'max' or 'all', choose busiest backup);
-	 'close' is the same as 'eject'.
+     close {mount-point|all}: unmap drive with 'cryptsetup close'.
+         if mount-point is not an absolute path, call 'snapback' to figure out
+	 what to do (if 'max' or 'all', choose busiest backup);
+	 'eject' is a synonym for 'close'.
 
      Common options:
 	-d: Debug shell script (don't run commands, just show them): simulation
@@ -90,7 +91,7 @@ list-drives() {
 		set-FS_label--from-mount_dir $mount_dir
 		local  dev=/dev/mapper/$FS_label    dm=
 		[[ -b $dev ]] && set-absolute_path $dev &&
-		    dm="\t# decrypted device is $dev -> $absolute_path"
+		    dm="\t# mapped device is $dev -> $absolute_path"
 
 		echo -e "$drive $raw_dev$dm"
 	done | sort
@@ -310,10 +311,10 @@ unmount-drive() {
 
 # ---------------------------------
 
-encrypt-drive() {
+unmap-drive() {
 	local name=$1
 
-	echo "encrypting ${mount_dir-} (assuming name=$name) ..."
+	echo "unmapping ${mount_dir-} (assuming name=$name) ..."
 	RunCmd sudo cryptsetup close $name && echo "Success!"
 }
 
@@ -337,7 +338,7 @@ close() {
 
 	unmount-drive $mount_dir
 
-	encrypt-drive $name
+	unmap-drive $name
 }
 
 ##############################################################################
@@ -360,16 +361,16 @@ stack_frame_to_show=0		# show line-number inside the 'case' statement
 $Trace
 
 case $action in
-   # list-drives: show the encrypted drives
+   # list-drives: show all encrypted drives
    ( l*s* ) undo_action_abbrev list-drives
 	list-drives "$@"
 	;;
-   # init device name: setup encryption (find device with: ls -lt /dev/sd*)
+   # init name device: setup encryption (find device with: ls -lt /dev/sd*)-
    ( init )
 	[[ $# == 2 ]] || abort-with-action-Usage
 	init-device "$@"
 	;;
-    # open [-M] { device mount-point | all }: run 'cryptsetup open' on device,
+    # open [-M] { mount-point device | all }: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
 	[[ ${1-} = -M ]] && { shift; do_mount=$false; } || do_mount=$true
 	if [[ $* == all ]]
@@ -379,7 +380,7 @@ case $action in
 	   else abort-with-action-Usage
 	fi
 	;;
-    # close {mount-point|all}: if mount-point is relative path, call 'snapback'
+    # close {mount-point|all}: unmap drive with 'cryptsetup close'.
     ( c* ) undo_action_abbrev close
 	if [[ $* == all ]]
 	   then close-all-opened-drives
