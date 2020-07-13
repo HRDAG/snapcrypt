@@ -37,10 +37,11 @@ Usage: $our_name [options] action [args]
 	call 'snapback' to get the mount-point.  [This action is run from
 	a udev rule in /etc/snapcrypt/drives.rules .]  No mount if -M.
 
-     close {mount-point|all}: unmap drive with 'cryptsetup close'.
+     close [-f] {mount-point|all}: unmap drive with 'cryptsetup close'.
          if mount-point is not an absolute path, call 'snapback' to figure out
 	 what to do (if 'max' or 'all', choose busiest backup);
 	 'eject' is a synonym for 'close'.
+	 Use -f to close even without any good snapshots (e.g. maintenance).
 
      Common options:
 	-d: Debug shell script (don't run commands, just show them): simulation
@@ -163,6 +164,8 @@ setup-vars-for-log-and-abort() {
 
 	file_for_logging=$log_dir/$FS_label.log
 	log_msg_prefix=' $raw_device'
+
+	[[ -t 0 || -t 1 || -t 2 || ${HOME-} ]] || exec 2> $file_for_logging
 }
 
 # ---------------------------------
@@ -283,8 +286,11 @@ set-name--from-FS_label() {
 assert-drive-has-new-backups() {
 	local mount_dir=$1
 
-	[[ ! $(which snapback) ]] ||
-	snapback has-new-snapshots $mount_dir || exit $?
+	[[ ${do_force-} || ! $(which snapback) ]] ||
+	snapback has-new-snapshots $mount_dir && return
+
+	warn "use -f to force a close"
+	exit 1
 }
 
 # ---------------------------------
@@ -399,8 +405,9 @@ case $action in
 	   else abort-with-action-Usage
 	fi
 	;;
-    # close {mount-point|all}: unmap drive with 'cryptsetup close'.
+    # close [-f] {mount-point|all}: unmap drive with 'cryptsetup close'.
     ( c* ) undo_action_abbrev close
+	[[ ${1-} == -f ]] && do_force=$true || do_force=$false
 	if [[ $* == all ]]
 	   then close-all-opened-drives
 	elif [[ $# == [12] ]]
