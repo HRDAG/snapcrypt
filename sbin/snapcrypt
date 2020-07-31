@@ -24,7 +24,9 @@ PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 Usage="\
 Usage: $our_name [options] action [args]
+
   Current actions are:
+
      list-drives: show all encrypted drives.
 
      status name: show detailed status of encrypted drive.
@@ -38,11 +40,12 @@ Usage: $our_name [options] action [args]
 	a udev rule in /etc/snapcrypt/drives.rules .]
 	Use -r to mount readonly, -M to not mount.
 
-     close [-f] {mount-dir|all}: unmap drive with 'cryptsetup close'.
-         if mount-dir is not an absolute path, call 'snapback' to figure out
+     close [-f] {mount-dir|all}: unmap drive (cryptsetup close), then unmount.
+         If mount-dir is not an absolute path, call 'snapback' to figure out
 	 what to do (if 'max' or 'all', choose busiest backup);
 	 'eject' is a synonym for 'close'.
 	 Use -f to close even without any good snapshots (e.g. maintenance).
+
 
      Common options:
 	-d: Debug shell script (don't run commands, just show them): simulation
