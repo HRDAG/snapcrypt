@@ -12,8 +12,12 @@ readonly -f abort abort-function abort-with-action-Usage
 readonly -f set-FS_label--from-mount_dir set-FS_type--from-path
 readonly -f merged-continuation-lines need-cmds
 
-source /etc/snapcrypt/configure.sh || abort "missing configure.sh"
-readonly udev_rules_file=/etc/snapcrypt/drives.rules
+for dir in ~/etc /usr/local/etc /etc
+    do	config_dir=$dir/$our_name
+	[[ -d $config_dir ]] && break
+done; readonly config_dir
+source $config_dir/configure.sh || abort "missing configure.sh"
+readonly udev_rules_file=$config_dir/drives.rules
 [[ -s $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
 
 # this sets common_mount_options, extN_mount_options, xfs_mount_options
@@ -37,7 +41,7 @@ Usage: $our_name [options] action [args]
 	using FS_label (derived from mount-dir) as name; then mount
 	the decrypted device.  If mount-dir is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
-	a udev rule in /etc/snapcrypt/drives.rules .]
+	a udev rule in $config_dir/drives.rules .]
 	Use -r to mount readonly, -M to not mount.
 
      close [-f] {mount-dir|all}: unmap drive (cryptsetup close) & park heads.
@@ -131,7 +135,7 @@ init-device() {
 	local dev=$decrypted_device
 	warn "decrypting $device, so you can run: snapback mkfs $dev $name
 
-	add rule to /etc/snapcrypt/drives.rules for $*"
+	add rule to $config_dir/drives.rules for $*"
 }
 
 # ----------------------------------------------------------------------------
