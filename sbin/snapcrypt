@@ -35,7 +35,8 @@ Usage: $our_name [options] action [args]
 
      status name: show detailed status of encrypted drive.
 
-     init name device: setup encryption (find device with: ls -lt /dev/sd*)-
+     init [-s sector-size] name device: setup encryption. -s defaults to 4KB;
+        find the device with: ls -lt /dev/sd*[^0-9]
 
      open [-r|-M] { mount-dir device | all }: run 'cryptsetup open' on device,
 	using FS_label (derived from mount-dir) as name; then mount
@@ -126,7 +127,8 @@ init-device() {
 	[[ -s $drive_key_file ]] || abort "must create $drive_key_file"
 
 	warn "encrypting $device\n\n   be SURE you type 'YES' not 'yes' ..."
-	local LUKS2_opts="--type luks2 --sector-size 4096 --label $FS_label"
+	local \
+	LUKS2_opts="--type luks2 --sector-size $sector_size --label $FS_label"
 	$IfRun sudo cryptsetup luksFormat $LUKS2_opts $device $drive_key_file||
 	    abort-function "cryptsetup returned $?; maybe repeat, after run:
 		sudo cryptsetup close $FS_label"
@@ -186,7 +188,7 @@ set-decrypted_device() {
 	[[ -b $decrypted_device ]] ||
 	$IfRun sudo cryptsetup open \
 	   --key-file $drive_key_file --type luks $raw_device $FS_label ||
-		abort "'cryptsetup open' failed, status=$?; check syslog"
+		abort "'cryptsetup open' failed, status=$?; check syslog, and see D. in snapback's doc/Install.txt"
 
 	[[ -b $decrypted_device ]] || $IfRun \
 	    abort "opened encrypted device, but can't find $decrypted_device"
@@ -430,6 +432,7 @@ case $action in
 	;;
    # init name device: setup encryption (find device with: ls -lt /dev/sd*)-
    ( init )
+	[[ $1 == -s ]] && { sector_size=$2; shift 2; } || sector_size=4096
 	[[ $# == 2 ]] || abort-with-action-Usage
 	init-device "$@"
 	;;
