@@ -129,7 +129,7 @@ init-device() {
 	local LUKS2_opts="--type luks2 --sector-size 4096 --label $FS_label"
 	$IfRun sudo cryptsetup luksFormat $LUKS2_opts $device $drive_key_file||
 	    abort-function "cryptsetup returned $?; maybe repeat, after run:
-		sudo cryptsetup --deferred close $FS_label"
+		sudo cryptsetup close $FS_label"
 
 	set-decrypted_device 		# also decrypts
 	local dev=$decrypted_device
@@ -186,7 +186,7 @@ set-decrypted_device() {
 	[[ -b $decrypted_device ]] ||
 	$IfRun sudo cryptsetup open \
 	   --key-file $drive_key_file --type luks $raw_device $FS_label ||
-		abort "'cryptsetup open' failed, status=$?"
+		abort "'cryptsetup open' failed, status=$?; check syslog"
 
 	[[ -b $decrypted_device ]] || $IfRun \
 	    abort "opened encrypted device, but can't find $decrypted_device"
@@ -198,7 +198,7 @@ set-log_device-mount_options() {
 	local FS_type=$1
 
 	log_device=
-	mount_options=${common_mount_options:-nosuid,nodev,relatime,nodiratime}
+	mount_options=${common_mount_options:-nosuid,nodev,noatime}
 
 	local FS_opts=		   # grab opts from /etc/snapback/configure.sh
 	case $FS_type in
