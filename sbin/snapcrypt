@@ -36,7 +36,9 @@ Usage: $our_name [options] action [args]
      status name: show detailed status of encrypted drive.
 
      init [-s sector-size] name device: setup encryption. -s defaults to 4KB;
-        find the device with: ls -lt /dev/sd*[^0-9]
+        find the device with: ls -lt /dev/sd[a-z]*
+
+     rule name device: print a udevd rule to open the device
 
      open [-r|-M] { mount-dir device | all }: run 'cryptsetup open' on device,
 	using FS_label (derived from mount-dir) as name; then mount
@@ -82,19 +84,27 @@ need-cmds cryptsetup fuser
 # functions
 ##############################################################################
 
+function set-serial_number() {
+	local raw_dev=${1%%[0-9]*}
+
+	serial_number=$(udevadm info $raw_dev |
+			    sed -n 's/.*SERIAL_SHORT=//p')
+	[[ $serial_number ]]
+}
+
+# ----------------------
+
 list-drives() {
 
 	local raw_dev
-	for raw_dev in /dev/sd*[!0-9]
-	    do	local serial=$(udevadm info $raw_dev |
-				sed -n 's/.*SERIAL_SHORT=//p')
-		if [[ ! $serial ]]
-		   then warn "didn't find SERIAL_SHORT value for $raw_dev"
-			continue
-		fi
+	for raw_dev in /dev/sd[a-z]*
+	    do	sudo cryptsetup isLuks $raw_dev || continue
+
+		set-serial_number $raw_dev || { echo "? $raw_dev"; continue; }
+
 		set -- $(merged-continuation-lines $udev_rules_file |
-			     sed -n "/\b$serial\b/s/%k.*//p")
-		[[ $# != 0 ]] || continue
+			     sed -n "/\b$serial_number\b/s/%k.*//p")
+		[[ $# != 0 ]] || { echo "? $raw_dev"; continue; }
 		local drive=${!#}
 
 		if [[ $drive == /* ]]
@@ -109,6 +119,25 @@ list-drives() {
 		echo -e "$drive $raw_dev$dm"
 	done | sort
 }
+
+# ----------------------------------------------------------------------------
+# functions for action 'rule'
+# ----------------------------------------------------------------------------
+
+readonly rule_format='
+# udev puts the basename of the raw-device (which matched KERNEL) into %%k
+ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="%s", \
+   RUN+="/usr/local/sbin/snapcrypt %s %%k'
+
+print-rule() {
+	local name=$1 device=$2
+
+	set-serial_number $device
+	local rule
+	printf -v rule "$rule_format" $serial_number $name
+	echo "$rule"
+}
+
 
 # ----------------------------------------------------------------------------
 # funcctions for action 'init'
@@ -164,8 +193,15 @@ set-mount_dir-FS_label-raw_device() {
 	set-FS_label--from-mount_dir $mount_dir
 
 	[[ $raw_device ]] || return
+
+	local LUKS_device=
 	[[ $raw_device == /dev/*  ]] || raw_device=/dev/$raw_device
-	[[ -b $raw_device || -t 2 ]] || $IfRun sleep 15
+	for raw_device in $raw_device*
+	    do	sudo cryptsetup isLuks $raw_device || continue
+		LUKS_device=$raw_device
+		break
+	done
+	raw_device=$LUKS_device
 	[[ -b $raw_device ]] || abort "$raw_device is not a block device"
 }
 
@@ -422,7 +458,7 @@ $Trace
 
 case $action in
    # list-drives: show all encrypted drives.
-   ( l*s* ) undo_action_abbrev list-drives
+   ( l*s* ) undo_action_abbrev list-drives # ls
 	list-drives "$@"
 	;;
    # status name: show detailed status of encrypted drive.
@@ -435,6 +471,11 @@ case $action in
 	[[ $1 == -s ]] && { sector_size=$2; shift 2; } || sector_size=4096
 	[[ $# == 2 ]] || abort-with-action-Usage
 	init-device "$@"
+	;;
+   # rule name device: print a udevd rule to open the device
+   ( r* ) undo_action_abbrev rule
+	[[ $# == 2 ]] || abort-with-action-Usage
+	print-rule "$@"
 	;;
     # open [-M] { mount-dir device | all }: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
