@@ -146,11 +146,9 @@ print-rule() {
 init-device() {
 	local name=$1 device=$2
 
-	raw_device=$device
-	mount_dir=$(snapback drive $name)
-	set-mount_dir-FS_label-raw_device
+	set-mount_dir-FS_label-raw_device $name $device
+	[[ -b $raw_device ]] || abort "$device not a block device"
 	device=$raw_device
-	[[ -b $device ]] || abort-function "$device not a block device"
 
 	fuser -m -v $device && $IfRun abort "$device is in-use"
 	[[ -s $drive_key_file ]] || abort "must create $drive_key_file"
@@ -186,23 +184,38 @@ open-all-unopened-drives() {
 # ------------------------------------------------------------------
 
 set-mount_dir-FS_label-raw_device() {
+	local name=$1 device=$2
 
-	[[ $mount_dir == /* ]] || mount_dir=$(snapback drive $mount_dir)
-	[[ $mount_dir ]] || exit 1
+	if [[ $name ]]
+	   then if [[ $name == /* ]]
+		   then mount_dir=$name
+		   else mount_dir=$(snapback drive $name 2>/dev/null)
+		fi
+		if [[ $mount_dir ]]
+		   then set-FS_label--from-mount_dir $mount_dir
+		   else FS_label=$name
+		fi
+	   else mount_dir=  FS_label=
+	fi
 
-	set-FS_label--from-mount_dir $mount_dir
+	[[ $device ]] || return
+	raw_device=
 
-	[[ $raw_device ]] || return
-
-	local LUKS_device=
-	[[ $raw_device == /dev/*  ]] || raw_device=/dev/$raw_device
-	for raw_device in $raw_device*
-	    do	sudo cryptsetup isLuks $raw_device || continue
-		LUKS_device=$raw_device
+	local dir
+	[[ $device == /* ]] ||
+	for dir in /dev/mapper /dev
+	    do	[[ -b  $dir/$device ]] || continue
+		device=$dir/$device
 		break
 	done
-	raw_device=$LUKS_device
-	[[ -b $raw_device ]] || abort "$raw_device is not a block device"
+	[[ $device == /dev/mapper/* ]] && { raw_device=$device ; return; }
+	[[ $device == /* ]] || return
+
+	for device in $device*
+	    do	sudo cryptsetup isLuks $device || continue
+		raw_device=$device
+		break
+	done
 }
 
 # ---------------------------------
@@ -253,9 +266,9 @@ set-log_device-mount_options() {
 # ---------------------------------
 
 open() {
-	local mount_dir=$1 raw_device=${2-}
+	local name=$1 device=${2-}
 
-	set-mount_dir-FS_label-raw_device
+	set-mount_dir-FS_label-raw_device $name $device
 
 	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
 
@@ -297,18 +310,29 @@ close-all-opened-drives() {
 
 # ----------------------------------------------------------------------------
 
-set-mount_dir() {
-	local _mount_dir=$1
-	mount_dir=$_mount_dir
+set-mount_dir-mapped_dev() {
+	local name=$1
 
-	case $mount_dir in
-	    ( /*  ) ;;
+	mount_dir=  mapped_dev=
+	case $name in
+	    ( /*  ) mount_dir=$name ;;
 	    ( max ) mount_dir=$(snapback max-drive) ;;
-	    (  *  ) mount_dir=$(snapback     drive $mount_dir) ;;
+	    (  *  )
+		mapped_dev=/dev/mapper/$name
+		if [[ ! -b $mapped_dev ]]
+		   then mapped_dev=
+			mount_dir=$(snapback     drive $name)
+		fi ;;
 	esac
 
-	[[ $mount_dir && -d $mount_dir ]] || 
-	    abort "can't find mount directory for '$_mount_dir'"
+	[[ $mount_dir || $mapped_dev ]] ||
+	    abort "can't find encrypted mapping or mount for '$name'"
+
+	if [[ $mount_dir ]]
+	   then set-FS_label--from-mount_dir
+		mapped_dev=/dev/mapper/$FS_label
+	   else set-mount_dir--from-FS-label $name
+	fi
 }
 
 # ---------------------------------
@@ -333,6 +357,8 @@ set-name--from-FS_label() {
 
 assert-drive-has-new-backups() {
 	local mount_dir=$1
+
+	[[ $mount_dir ]] || return 1
 
 	[[ ${do_force-} || ! $(which snapback) ]] ||
 	snapback has-new-snapshots $mount_dir && return
@@ -378,7 +404,7 @@ set-raw_device--from-drive_name() {
 unmap-drive() {
 	local name=$1
 
-	echo "unmapping ${mount_dir-} (assuming name=$name) ..."
+	echo "unmapping name=$name ..."
 	RunCmd sudo cryptsetup close $name && echo "Success!"
 }
 
@@ -402,15 +428,17 @@ alert-smartd() {
 close() {
 	[[ $1 == -q ]] && { local is_quiet=$true; shift; } || local is_quiet=
 
-	set-mount_dir $1
-
-	set-FS_label--from-mount_dir $mount_dir
+	set-mount_dir-mapped_dev $1
+	if [[ $mapped_dev ]]
+	   then     FS_label=$(basename $mapped_dev)
+	   else set-FS_label--from-mount_dir $mount_dir
+	fi
 
 	setup-vars-for-log-and-abort
 
 	if ! set-name--from-FS_label $FS_label
 	   then [[ $is_quiet ]] && return
-		abort "can't find encryption 'name' for $FS_label"
+		abort "can't find encryption mapping for name '$FS_label'"
 	fi
 
 	assert-drive-has-new-backups $mount_dir
