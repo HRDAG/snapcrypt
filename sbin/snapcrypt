@@ -370,6 +370,8 @@ open() {
 	setup-vars-for-log-and-abort
 
 	set-decrypted_device		# also decrypts
+	[[ -t 1 ]] &&
+	set-FS_label2physical_dev--as-list-drives | fgrep -w $physical_device
 
 	[[ $do_mount ]] || return 0
 
