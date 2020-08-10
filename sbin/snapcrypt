@@ -98,7 +98,9 @@ list-drives() {
 
 	local raw_dev
 	for raw_dev in /dev/sd[a-z]*
-	    do	sudo cryptsetup isLuks $raw_dev || continue
+	    do	[[ -b $raw_dev ]] || continue
+
+		sudo cryptsetup isLuks $raw_dev || continue
 
 		set-serial_number $raw_dev || { echo "? $raw_dev"; continue; }
 
@@ -146,7 +148,7 @@ print-rule() {
 init-device() {
 	local name=$1 device=$2
 
-	set-mount_dir-FS_label-raw_device $name $device
+	set-mount_dir-FS_label-raw_device -i $name $device
 	[[ -b $raw_device ]] || abort "$device not a block device"
 	device=$raw_device
 
@@ -167,7 +169,7 @@ init-device() {
 	set-serial_number $device ||abort "add rule to $udev_rules_file for $*"
 	if grep -A1 "\b$serial_number\b" $udev_rules_file
 	   then warn "already have the above rule for $name"
-	   else print-rule $name $dev | tee -a $udev_rules_file ||
+	   else print-rule $name $device | tee -a $udev_rules_file ||
 		   abort "couldn't append the above rule to $udev_rules_file"
 		echo -e "\nJust added the above rule to $udev_rules_file"
 	fi
@@ -194,6 +196,7 @@ open-all-unopened-drives() {
 # ------------------------------------------------------------------
 
 set-mount_dir-FS_label-raw_device() {
+	[[ $1 == -i ]] && { shift; local is_init=$true; } || local is_init=
 	local name=$1 device=$2
 
 	if [[ $name ]]
@@ -219,7 +222,11 @@ set-mount_dir-FS_label-raw_device() {
 		break
 	done
 	[[ $device == /dev/mapper/* ]] && { raw_device=$device ; return; }
-	[[ $device == /* ]] || return
+	if [[ $device == /* ]]
+	   then [[ $is_init ]] &&	# not yet isLuks, need to create it?
+		    raw_device=$device && return
+	   else return
+	fi
 
 	for device in $device*
 	    do	sudo cryptsetup isLuks $device || continue
@@ -347,24 +354,6 @@ set-mount_dir-mapped_dev() {
 
 # ---------------------------------
 
-set-name--from-FS_label() {
-	local FS_label=$1
-
-	[[ -b /dev/mapper/$FS_label ]] && name=$FS_label && return
-
-	local prefix
-	for prefix in ${old_crypt_name_prefixes-}
-	    do	name=$prefix$drive_name
-		[[ -b /dev/mapper/$name ]] && break
-		name=
-	done
-	[[ $FS_label == backup_Z ]] && name=$FS_label # for testing
-
-	[[ ${name-} ]]
-}
-
-# ---------------------------------
-
 assert-drive-has-new-backups() {
 	local mount_dir=$1
 
@@ -446,17 +435,12 @@ close() {
 
 	setup-vars-for-log-and-abort
 
-	if ! set-name--from-FS_label $FS_label
-	   then [[ $is_quiet ]] && return
-		abort "can't find encryption mapping for name '$FS_label'"
-	fi
-
 	assert-drive-has-new-backups $mount_dir
 
 	unmount-drive $mount_dir
 
-	set-raw_device--from-drive_name $name
-	unmap-drive $name
+	set-raw_device--from-drive_name $FS_label
+	unmap-drive $FS_label
 
 	[[ $action == close && $raw_device ]] || return
 
