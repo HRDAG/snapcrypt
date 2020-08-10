@@ -202,9 +202,7 @@ init-device() {
 	    abort-function "cryptsetup returned $?; maybe repeat, after run:
 		sudo cryptsetup close $FS_label"
 
-	set-decrypted_device 		# also decrypts
-	local dev=$decrypted_device
-	warn "decrypted $device, so you can run: snapback mkfs $dev $name"
+	set-decrypted_device--as-open $FS_label $physical_device
 
 	set-serial_number $device ||abort "add rule to $udev_rules_file for $*"
 	if grep -A1 "\b$serial_number\b" $udev_rules_file
@@ -322,7 +320,8 @@ setup-vars-for-log-and-abort() {
 
 # ---------------------------------
 
-set-decrypted_device() {
+set-decrypted_device--as-open() {
+	local FS_label=$1 physical_device=$2
 
 	decrypted_device=/dev/mapper/$FS_label
 
@@ -369,7 +368,7 @@ open() {
 
 	setup-vars-for-log-and-abort
 
-	set-decrypted_device		# also decrypts
+	set-decrypted_device--as-open $FS_label $physical_device
 	[[ -t 1 ]] &&
 	set-FS_label2physical_dev--as-list-drives | fgrep -w $physical_device
 
