@@ -168,8 +168,8 @@ print-rule() {
 init-device() {
 	local name=$1 device=$2
 
-	set-mount_dir-FS_label--from-name $name
-	set-physical_device $device
+	set-mount_dir-FS_label--from-name -i $name
+	set-physical_device -i $device
 	device=$physical_device
 
 	fuser -m -v $device && $IfRun abort "$device is in-use"
@@ -215,19 +215,36 @@ open-all-unopened-drives() {
 
 # ------------------------------------------------------------------
 
+set-mount_dir-FS_label--from-device() {
+	local device=$1
+
+	set-FS_label--from-LUKS-header $device &&
+	set-mount_dir--from-FS-label $FS_label &&
+	    return
+	abort "can't figure out FS_label from $device"
+}
+
+# ----------------------
+
 set-mount_dir-FS_label--from-name() {
+	[[ $1 == -i ]] && { shift; local is_init=$true; } || local is_init=
 	local name=$1
 
-	if [[ $name ]]
-	   then if [[ $name == /* ]]
-		   then mount_dir=$name
-		   else mount_dir=$(snapback drive $name 2>/dev/null)
-		fi
-		if [[ $mount_dir ]]
-		   then set-FS_label--from-mount_dir $mount_dir
-		   else FS_label=$name
-		fi
-	   else mount_dir=  FS_label=
+	[[ $name && $name != '?' ]] || abort "name has to exist"
+
+	if [[ $name == /dev/* ]]
+	   then [[ ! $is_init ]] || abort "need real name, mot device $device"
+		set-mount_dir-FS_label--from-device $name
+		return
+	fi
+
+	if [[ $name == /* ]]
+	   then mount_dir=$name
+	   else mount_dir=$(snapback drive $name 2>/dev/null)
+	fi
+	if [[ $mount_dir ]]
+	   then set-FS_label--from-mount_dir $mount_dir
+	   else FS_label=$name
 	fi
 }
 
@@ -312,6 +329,7 @@ open() {
 	local name=$1 device=${2-}
 
 	set-mount_dir-FS_label--from-name $name
+	[[ $name == /dev/* && ! $device ]] && device=$name
 	set-physical_device $device
 
 	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
@@ -354,14 +372,15 @@ close-all-opened-drives() {
 
 # ----------------------------------------------------------------------------
 
-set-mount_dir-mapped_dev() {
+set-mount_dir-mapped_dev-FS_label() {
 	local name=$1
 
 	mount_dir=  mapped_dev=
 	case $name in
-	    ( /*  ) mount_dir=$name ;;
-	    ( max ) mount_dir=$(snapback max-drive) ;;
-	    (  *  )
+	    ( /dev/* ) set-mount_dir-FS_label--from-device $name ;;
+	    ( /*     ) mount_dir=$name ;;
+	    ( max    ) mount_dir=$(snapback max-drive) ;;
+	    (  *     )
 		mapped_dev=/dev/mapper/$name
 		if [[ ! -b $mapped_dev ]]
 		   then mapped_dev=
@@ -376,6 +395,13 @@ set-mount_dir-mapped_dev() {
 	   then set-FS_label--from-mount_dir $mount_dir
 		mapped_dev=/dev/mapper/$FS_label
 	   else set-mount_dir--from-FS-label $name
+	fi
+	[[ $mount_dir && $mapped_dev ]] || abort-function "logic error"
+
+	[[ $FS_label ]] ||
+	if [[ $mapped_dev ]]
+	   then     FS_label=$(basename $mapped_dev)
+	   else set-FS_label--from-mount_dir $mount_dir
 	fi
 }
 
@@ -458,11 +484,7 @@ alert-smartd() {
 close() {
 	[[ $1 == -q ]] && { local is_quiet=$true; shift; } || local is_quiet=
 
-	set-mount_dir-mapped_dev $1
-	if [[ $mapped_dev ]]
-	   then     FS_label=$(basename $mapped_dev)
-	   else set-FS_label--from-mount_dir $mount_dir
-	fi
+	set-mount_dir-mapped_dev-FS_label $1
 
 	setup-vars-for-log-and-abort
 
