@@ -38,14 +38,14 @@ Usage: $our_name [options] action [args]
      init [-s sector-size] name device: setup encryption. -s defaults to 4KB;
         find the device with: ls -lt /dev/sd[a-z]*
 
-     rule name device: print a udevd rule to open the device
+     rule name device: print a udevd rule to use to call this command.
 
-     open [-r|-M] {mount-dir [device] | all}: run 'cryptsetup open' on device,
-	using FS_label (derived from mount-dir) as name; then mount
-	the decrypted device.  If mount-dir is not an absolute path,
+     open [-r|-M] {name|mount [device] | all}: run 'cryptsetup open' on device,
+	specifying a name (e.g. FS_label) or mount-dir; then mount
+	the decrypted mapping device.  If mount is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
 	a udev rule in $udev_rules_file .]
-	Use -r to mount readonly, -M to not mount.
+	Use -r to mount readonly, or -M to not mount.
 
      close [-f] {mapping|mount|max}: unmap drive (cryptsetup close) & detach.
          If mount is not an absolute path, call 'snapback' to figure out
@@ -585,12 +585,12 @@ case $action in
 	[[ $# == 2 ]] || abort-with-action-Usage
 	init-device "$@"
 	;;
-   # rule name device: print a udevd rule to open the device
+   # rule name device: print a udevd rule to use to call this command.
    ( r* ) undo_action_abbrev rule
 	[[ $# == 2 ]] || abort-with-action-Usage
 	print-rule "$@"
 	;;
-    # open [-r|-M] {mount-dir [device] | all}: run 'cryptsetup open' on device,
+   # open [-r|-M] {name|mount [device] | all}: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
