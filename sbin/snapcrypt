@@ -307,7 +307,11 @@ set-physical_device() {
 	fi
 	[[ $device == /* ]] || abort "can't find block device $device"
 
-	[[ $is_init ]] && physical_device=$device && return
+	if [[ $is_init ]]
+	   then [[ -b $device ]] || abort "device $device doesn't exist"
+		physical_device=$device
+		return
+	fi
 
 	physical_device=
 	for device in $device*
