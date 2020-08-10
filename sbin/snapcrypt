@@ -33,7 +33,7 @@ Usage: $our_name [options] action [args]
 
      list-drives: show all encrypted drives.
 
-     status name: show detailed status of encrypted drive.
+     status { name(s) | 'all' }: show detailed status of encrypted drive(s).
 
      init [-s sector-size] name device: setup encryption. -s defaults to 4KB;
         find the device with: ls -lt /dev/sd[a-z]*
@@ -466,13 +466,16 @@ close() {
 # ----------------------------------------------------------------------------
 
 show-status() {
-	local name=$1
 
-	set-mount_dir $1
+	[[ $* == all ]] && set -- $(list-drives | sed 's/ .*//')
 
-	set-FS_label--from-mount_dir $mount_dir
-
-	sudo cryptsetup status $FS_label
+	local name
+	for name
+	    do	[[ $name == '?' ]] && continue
+		set-mount_dir-FS_label--from-name $name
+		header $name
+		sudo cryptsetup status $FS_label
+	done
 }
 
 ##############################################################################
@@ -499,9 +502,9 @@ case $action in
    ( l*s* ) undo_action_abbrev list-drives # ls
 	list-drives "$@"
 	;;
-   # status name: show detailed status of encrypted drive.
+   # status { name(s) | 'all' }: show detailed status of encrypted drive(s).
    ( s* ) undo_action_abbrev status
-	[[ $# == 1 ]] || abort-with-action-Usage
+	[[ $# != 0 ]] || abort-with-action-Usage
 	show-status "$@"
 	;;
    # init name device: setup encryption (find device with: ls -lt /dev/sd*)-
