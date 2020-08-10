@@ -29,7 +29,7 @@ source  $config_file || abort "$config_file doesn't end with 'true'"
 readonly udev_rules_file=$config_dir/drives.rules
 [[  -s  $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
 
-# this sets common_mount_options, extN_mount_options, xfs_mount_options
+# common_mount_options, extN_mount_options, xfs_mount_options, drive_dir_prefix
 set-config_file snapback && source $config_file
 
 # udev may not provide much of a PATH: https://unix.stackexchange.com/a/99073
