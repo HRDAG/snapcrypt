@@ -94,6 +94,20 @@ function set-serial_number() {
 
 # ----------------------
 
+set-FS_label--from-mount_dir ${drive_dir_prefix-} # have snapback?
+readonly FS_label_prefix=$FS_label
+
+function set-FS_label--from-LUKS-header() {
+	local physical_dev=$1
+
+	set -- $(sudo cryptsetup luksDump $physical_dev 2>/dev/null |
+		     grep '^Label:')
+	[[ $# == 0 ]] && FS_label= && return 1
+	FS_label=${!#}
+}
+
+# ----------------------
+
 list-drives() {
 
 	local physical_dev
@@ -102,18 +116,23 @@ list-drives() {
 
 		sudo cryptsetup isLuks $physical_dev || continue
 
+		set-FS_label--from-LUKS-header $physical_dev ||
 		set-serial_number $physical_dev ||
 		    { echo "? $physical_dev"; continue; }
 
-		set -- $(merged-continuation-lines $udev_rules_file |
-			     sed -n "/\b$serial_number\b/s/%k.*//p")
-		[[ $# != 0 ]] || { echo "? $physical_dev"; continue; }
-		local drive=${!#}
+		if [[ ! $FS_label ]]
+		   then set -- $(merged-continuation-lines $udev_rules_file |
+				     sed -n "/\b$serial_number\b/s/%k.*//p")
+			[[ $# != 0 ]] || { echo "? $physical_dev"; continue; }
+			local drive=${!#}
+		   else local drive=${FS_label#$FS_label_prefix}
+		fi
 
 		if [[ $drive == /* ]]
 		   then local mount_dir=$drive
 		   else local mount_dir=${drive_dir_prefix-}$drive
 		fi
+		[[ $FS_label ]] ||
 		set-FS_label--from-mount_dir $mount_dir
 		local  dev=/dev/mapper/$FS_label    dm=
 		[[ -b $dev ]] && set-absolute_path $dev &&
