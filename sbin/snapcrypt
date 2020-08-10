@@ -76,6 +76,8 @@ let OPTIND=$OPTIND-1
 shift $OPTIND
 unset arg
 
+readonly tmp=$tmp_dir/$our_name-$$
+
 [[ $Trace && $debug_opt ]] && IfRun=:
 
 need-cmds cryptsetup fuser
@@ -108,7 +110,9 @@ function set-FS_label--from-LUKS-header() {
 
 # ----------------------
 
-list-drives() {
+declare -A FS_label2physical_dev
+
+set-FS_label2physical_dev--as-list-drives() {
 
 	local physical_dev
 	for physical_dev in /dev/sd[a-z]*
@@ -139,7 +143,23 @@ list-drives() {
 		    dm="\t# mapped device is $dev -> $absolute_path"
 
 		echo -e "$drive $physical_dev$dm"
-	done | sort
+
+		FS_label2physical_dev[$FS_label]=$physical_dev
+	done > $tmp && sort $tmp
+	rm -f  $tmp
+
+	FS_label2physical_dev['?']=	# make sure it's set
+}
+
+# ---------------------------------
+
+function set-device--from-FS_label() {
+	local FS_label=$(basename $1)
+
+	is-set FS_label2physical_dev ||
+	   set-FS_label2physical_dev--as-list-drives &> /dev/null
+	device=${FS_label2physical_dev[$FS_label]-}
+	[[ $device ]]
 }
 
 # ----------------------------------------------------------------------------
@@ -261,9 +281,13 @@ set-physical_device() {
 		device=$dir/$device
 		break
 	done
+	if [[ $device == /dev/mapper/* ]]
+	   then [[ ! $is_init ]] &&
+		set-device--from-FS_label $device &&
+		   physical_device=$device && return
+		abort-function "$device is mapping, not physical drive"
+	fi
 	[[ $device == /* ]] || abort "can't find block device $device"
-	[[ $device == /dev/mapper/* ]] &&
-	    abort-function "$device is encryption mapping, not physical drive"
 
 	[[ $is_init ]] && physical_device=$device && return
 
@@ -329,7 +353,8 @@ open() {
 	local name=$1 device=${2-}
 
 	set-mount_dir-FS_label--from-name $name
-	[[ $name == /dev/* && ! $device ]] && device=$name
+	[[ $name == /dev/[^m]* && ! $device ]] && device=$name
+	[[ $device ]] || set-device--from-FS_label $FS_label
 	set-physical_device $device
 
 	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
@@ -504,7 +529,8 @@ close() {
 
 show-status() {
 
-	[[ $* == all ]] && set -- $(list-drives | sed 's/ .*//')
+	[[ $* == all ]] &&
+	    set -- $(set-FS_label2physical_dev--as-list-drives | sed 's/ .*//')
 
 	local name
 	for name
@@ -537,7 +563,7 @@ $Trace
 case $action in
    # list-drives: show all encrypted drives.
    ( l*s* ) undo_action_abbrev list-drives # ls
-	list-drives "$@"
+	set-FS_label2physical_dev--as-list-drives "$@"
 	;;
    # status { name(s) | 'all' }: show detailed status of encrypted drive(s).
    ( s* ) undo_action_abbrev status
