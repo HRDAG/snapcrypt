@@ -220,32 +220,26 @@ set-physical_device() {
 
 	local dir
 	[[ $device == /* ]] ||
-	for dir in /dev/mapper /dev
+	for dir in /dev /dev/mapper
 	    do	[[ -b  $dir/$device ]] || continue
 		device=$dir/$device
 		break
 	done
-	[[ $device == /dev/mapper/* ]] && { physical_device=$device ; return; }
-	if [[ $device == /* ]]
-	   then [[ $is_init ]] &&	# not yet isLuks, need to create it?
-		    physical_device=$device && return
-	   else return
-	fi
+	[[ $device == /* ]] || abort "can't find block device $device"
+	[[ $device == /dev/mapper/* ]] &&
+	    abort-function "$device is encryption mapping, not physical drive"
 
+	[[ $is_init ]] && physical_device=$device && return
+
+	physical_device=
 	for device in $device*
 	    do	[[ -b $device ]] || continue
 		sudo cryptsetup isLuks $device || continue
 		physical_device=$device
-		break
+		return
 	done
-	[[ -b $physical_device ]] && return
 
-	if [[ $device == *\* ]]
-	   then abort "device $device doesn't exist"
-	elif [[ $device ]]
-	   then abort "$device not a block device"
-	   else abort "can't find device for name=$name device=$device"
-	fi
+	abort "encrypted device $1 doesn't exist"
 }
 
 # ---------------------------------
@@ -352,7 +346,7 @@ set-mount_dir-mapped_dev() {
 		mapped_dev=/dev/mapper/$name
 		if [[ ! -b $mapped_dev ]]
 		   then mapped_dev=
-			mount_dir=$(snapback     drive $name)
+			mount_dir=$(snapback drive $name)
 		fi ;;
 	esac
 
