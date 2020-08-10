@@ -40,7 +40,7 @@ Usage: $our_name [options] action [args]
 
      rule name device: print a udevd rule to open the device
 
-     open [-r|-M] { mount-dir device | all }: run 'cryptsetup open' on device,
+     open [-r|-M] {mount-dir [device] | all}: run 'cryptsetup open' on device,
 	using FS_label (derived from mount-dir) as name; then mount
 	the decrypted device.  If mount-dir is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
@@ -581,7 +581,7 @@ case $action in
 	[[ $# == 2 ]] || abort-with-action-Usage
 	print-rule "$@"
 	;;
-    # open [-M] { mount-dir device | all }: run 'cryptsetup open' on device,
+    # open [-r|-M] {mount-dir [device] | all}: run 'cryptsetup open' on device,
     ( o* ) undo_action_abbrev open
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
