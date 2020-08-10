@@ -148,8 +148,8 @@ print-rule() {
 init-device() {
 	local name=$1 device=$2
 
-	set-mount_dir-FS_label-raw_device -i $name $device
-	[[ -b $raw_device ]] || abort "$device not a block device"
+	set-mount_dir-FS_label--from-name $name
+	set-raw_device $device
 	device=$raw_device
 
 	fuser -m -v $device && $IfRun abort "$device is in-use"
@@ -195,9 +195,8 @@ open-all-unopened-drives() {
 
 # ------------------------------------------------------------------
 
-set-mount_dir-FS_label-raw_device() {
-	[[ $1 == -i ]] && { shift; local is_init=$true; } || local is_init=
-	local name=$1 device=$2
+set-mount_dir-FS_label--from-name() {
+	local name=$1
 
 	if [[ $name ]]
 	   then if [[ $name == /* ]]
@@ -210,9 +209,13 @@ set-mount_dir-FS_label-raw_device() {
 		fi
 	   else mount_dir=  FS_label=
 	fi
+}
 
-	[[ $device ]] || return
-	raw_device=
+# ---------------------------------
+
+set-raw_device() {
+	[[ $1 == -i ]] && { shift; local is_init=$true; } || local is_init=
+	local device=$1
 
 	local dir
 	[[ $device == /* ]] ||
@@ -229,10 +232,19 @@ set-mount_dir-FS_label-raw_device() {
 	fi
 
 	for device in $device*
-	    do	sudo cryptsetup isLuks $device || continue
+	    do	[[ -b $device ]] || continue
+		sudo cryptsetup isLuks $device || continue
 		raw_device=$device
 		break
 	done
+	[[ -b $raw_device ]] && return
+
+	if [[ $device == *\* ]]
+	   then abort "device $device doesn't exist"
+	elif [[ $device ]]
+	   then abort "$device not a block device"
+	   else abort "can't find device for name=$name device=$device"
+	fi
 }
 
 # ---------------------------------
@@ -285,7 +297,8 @@ set-log_device-mount_options() {
 open() {
 	local name=$1 device=${2-}
 
-	set-mount_dir-FS_label-raw_device $name $device
+	set-mount_dir-FS_label--from-name $name
+	set-raw_device $device
 
 	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
 
@@ -392,10 +405,12 @@ unmount-drive() {
 
 # ----------------------
 
-set-raw_device--from-drive_name() {
+function set-raw_device--from-FS_label() {
+	local label=$1
 
-	warn "need to finish $FUNCNAME, use: sudo cryptsetup status"
-	raw_device=
+	set -- $(sudo cryptsetup status $1 | grep '^ *device:')
+	raw_device=${!#}
+	[[ $raw_device ]]
 }
 
 # ---------------------------------
@@ -412,6 +427,7 @@ unmap-drive() {
 park-disk-heads() {
 	local raw_device=$(basename $1)
 
+	raw_device=${raw_device%%[0-9]*}
 	$IfRun sudo bash -c "echo 1 > /sys/block/$raw_device/device/delete"
 }
 
@@ -439,7 +455,7 @@ close() {
 
 	unmount-drive $mount_dir
 
-	set-raw_device--from-drive_name $FS_label
+	set-raw_device--from-FS_label $FS_label
 	unmap-drive $FS_label
 
 	[[ $action == close && $raw_device ]] || return
