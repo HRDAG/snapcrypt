@@ -44,7 +44,7 @@ Usage: $our_name [options] action [args]
 	using FS_label (derived from mount-dir) as name; then mount
 	the decrypted device.  If mount-dir is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
-	a udev rule in $config_dir/drives.rules .]
+	a udev rule in $udev_rules_file .]
 	Use -r to mount readonly, -M to not mount.
 
      close [-f] {mount-dir|all}: unmap drive (cryptsetup close) & park heads.
@@ -162,9 +162,19 @@ init-device() {
 
 	set-decrypted_device 		# also decrypts
 	local dev=$decrypted_device
-	warn "decrypting $device, so you can run: snapback mkfs $dev $name
+	warn "decrypted $device, so you can run: snapback mkfs $dev $name"
 
-	add rule to $config_dir/drives.rules for $*"
+	set-serial_number $device ||abort "add rule to $udev_rules_file for $*"
+	if grep -A1 "\b$serial_number\b" $udev_rules_file
+	   then warn "already have the above rule for $name"
+	   else print-rule $name $dev | tee -a $udev_rules_file ||
+		   abort "couldn't append the above rule to $udev_rules_file"
+		echo -e "\nJust added the above rule to $udev_rules_file"
+	fi
+
+	local  rules_symlink=/etc/udev/rules.d/USB-backup-drives.rules
+	[[ -e $rules_symlink ]] ||
+	    ln -v -s ../../${config_dir##*/}/drives.rules $rules_symlink
 }
 
 # ----------------------------------------------------------------------------
@@ -329,7 +339,7 @@ set-mount_dir-mapped_dev() {
 	    abort "can't find encrypted mapping or mount for '$name'"
 
 	if [[ $mount_dir ]]
-	   then set-FS_label--from-mount_dir
+	   then set-FS_label--from-mount_dir $mount_dir
 		mapped_dev=/dev/mapper/$FS_label
 	   else set-mount_dir--from-FS-label $name
 	fi
