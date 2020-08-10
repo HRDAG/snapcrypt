@@ -47,13 +47,13 @@ Usage: $our_name [options] action [args]
 	a udev rule in $udev_rules_file .]
 	Use -r to mount readonly, -M to not mount.
 
-     close [-f] {mount-dir|all}: unmap drive (cryptsetup close) & park heads.
-         If mount-dir is not an absolute path, call 'snapback' to figure out
-	 what to do (if 'max' or 'all', choose busiest backup);
-	 'eject' is a synonym for 'close'.
+     close [-f] {mapping|mount|max}: unmap drive (cryptsetup close) & detach.
+         If mount is not an absolute path, call 'snapback' to figure out
+	    what to do (if 'max' or 'all', choose busiest backup).
 	 Use -f to close even without any good snapshots (e.g. maintenance).
+	 'eject' is a synonym for 'close'.
 
-     unmap [-f] {mount-dir|all}: like 'close', but don't park disk heads.
+     unmap [-f] {mapping|mount|max}: like 'close', but don't detach.
 
      Common options:
 	-d: Debug shell script (don't run commands, just show them): simulation
@@ -525,8 +525,8 @@ case $action in
 	   else abort-with-action-Usage
 	fi
 	;;
-    # close [-f] {mount-dir|all}: unmap drive (cryptsetup close) & park heads.
-    # unmap [-f] {mount-dir|all}: like 'close', but don't park disk heads.
+    # close [-f] {mapping|mount|max}: unmap drive (cryptsetup close) & detach.
+    # unmap [-f] {mapping|mount|max}: like 'close', but don't detach.
     ( c* | u* )
 	if [[ $action == c* ]]
 	   then undo_action_abbrev close
