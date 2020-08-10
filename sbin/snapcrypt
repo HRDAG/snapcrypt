@@ -241,6 +241,14 @@ set-mount_dir-FS_label--from-device() {
 	set-FS_label--from-LUKS-header $device &&
 	set-mount_dir--from-FS-label $FS_label &&
 	    return
+
+	for device in $device*
+	    do	[[ -b $device ]] || continue
+		sudo cryptsetup isLuks $device || continue
+		set-mount_dir-FS_label--from-device $device
+		return
+	done
+
 	abort "can't figure out FS_label from $device"
 }
 
