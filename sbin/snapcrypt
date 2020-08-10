@@ -213,6 +213,7 @@ init-device() {
 
 	set-decrypted_device--as-open $FS_label $physical_device; echo
 	set-FS_label2physical_dev--as-list-drives | fgrep -w $physical_device
+	warn "decrypted $device, so you can now run: snapback mkfs $FS_label"
 
 	set-serial_number $device ||abort "add rule to $udev_rules_file for $*"
 	echo
