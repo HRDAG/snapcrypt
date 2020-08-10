@@ -85,9 +85,9 @@ need-cmds cryptsetup fuser
 ##############################################################################
 
 function set-serial_number() {
-	local raw_dev=${1%%[0-9]*}
+	local physical_dev=${1%%[0-9]*}
 
-	serial_number=$(udevadm info $raw_dev |
+	serial_number=$(udevadm info $physical_dev |
 			    sed -n 's/.*SERIAL_SHORT=//p')
 	[[ $serial_number ]]
 }
@@ -96,17 +96,18 @@ function set-serial_number() {
 
 list-drives() {
 
-	local raw_dev
-	for raw_dev in /dev/sd[a-z]*
-	    do	[[ -b $raw_dev ]] || continue
+	local physical_dev
+	for physical_dev in /dev/sd[a-z]*
+	    do	[[ -b $physical_dev ]] || continue
 
-		sudo cryptsetup isLuks $raw_dev || continue
+		sudo cryptsetup isLuks $physical_dev || continue
 
-		set-serial_number $raw_dev || { echo "? $raw_dev"; continue; }
+		set-serial_number $physical_dev ||
+		    { echo "? $physical_dev"; continue; }
 
 		set -- $(merged-continuation-lines $udev_rules_file |
 			     sed -n "/\b$serial_number\b/s/%k.*//p")
-		[[ $# != 0 ]] || { echo "? $raw_dev"; continue; }
+		[[ $# != 0 ]] || { echo "? $physical_dev"; continue; }
 		local drive=${!#}
 
 		if [[ $drive == /* ]]
@@ -118,7 +119,7 @@ list-drives() {
 		[[ -b $dev ]] && set-absolute_path $dev &&
 		    dm="\t# mapped device is $dev -> $absolute_path"
 
-		echo -e "$drive $raw_dev$dm"
+		echo -e "$drive $physical_dev$dm"
 	done | sort
 }
 
@@ -127,7 +128,7 @@ list-drives() {
 # ----------------------------------------------------------------------------
 
 readonly rule_format='
-# udev puts the basename of the raw-device (which matched KERNEL) into %%k
+# udev puts the basename of the physical-device (which matched KERNEL) into %%k
 ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="%s", \
    RUN+="/usr/local/sbin/snapcrypt %s %%k'
 
@@ -149,8 +150,8 @@ init-device() {
 	local name=$1 device=$2
 
 	set-mount_dir-FS_label--from-name $name
-	set-raw_device $device
-	device=$raw_device
+	set-physical_device $device
+	device=$physical_device
 
 	fuser -m -v $device && $IfRun abort "$device is in-use"
 	[[ -s $drive_key_file ]] || abort "must create $drive_key_file"
@@ -213,7 +214,7 @@ set-mount_dir-FS_label--from-name() {
 
 # ---------------------------------
 
-set-raw_device() {
+set-physical_device() {
 	[[ $1 == -i ]] && { shift; local is_init=$true; } || local is_init=
 	local device=$1
 
@@ -224,20 +225,20 @@ set-raw_device() {
 		device=$dir/$device
 		break
 	done
-	[[ $device == /dev/mapper/* ]] && { raw_device=$device ; return; }
+	[[ $device == /dev/mapper/* ]] && { physical_device=$device ; return; }
 	if [[ $device == /* ]]
 	   then [[ $is_init ]] &&	# not yet isLuks, need to create it?
-		    raw_device=$device && return
+		    physical_device=$device && return
 	   else return
 	fi
 
 	for device in $device*
 	    do	[[ -b $device ]] || continue
 		sudo cryptsetup isLuks $device || continue
-		raw_device=$device
+		physical_device=$device
 		break
 	done
-	[[ -b $raw_device ]] && return
+	[[ -b $physical_device ]] && return
 
 	if [[ $device == *\* ]]
 	   then abort "device $device doesn't exist"
@@ -252,7 +253,7 @@ set-raw_device() {
 setup-vars-for-log-and-abort() {
 
 	file_for_logging=$log_dir/$FS_label.log
-	log_msg_prefix=' $raw_device'
+	log_msg_prefix=' $physical_device'
 
 	[[ -t 0 || -t 1 || -t 2 || ${HOME-} ]] || exec 2> $file_for_logging
 }
@@ -265,7 +266,7 @@ set-decrypted_device() {
 
 	[[ -b $decrypted_device ]] ||
 	$IfRun sudo cryptsetup open \
-	   --key-file $drive_key_file --type luks $raw_device $FS_label ||
+	   --key-file $drive_key_file --type luks $physical_device $FS_label ||
 		abort "'cryptsetup open' failed, status=$?; check syslog, and see D. in snapback's doc/Install.txt"
 
 	[[ -b $decrypted_device ]] || $IfRun \
@@ -298,7 +299,7 @@ open() {
 	local name=$1 device=${2-}
 
 	set-mount_dir-FS_label--from-name $name
-	set-raw_device $device
+	set-physical_device $device
 
 	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
 
@@ -405,12 +406,12 @@ unmount-drive() {
 
 # ----------------------
 
-function set-raw_device--from-FS_label() {
+function set-physical_device--from-FS_label() {
 	local label=$1
 
 	set -- $(sudo cryptsetup status $1 | grep '^ *device:')
-	raw_device=${!#}
-	[[ $raw_device ]]
+	physical_device=${!#}
+	[[ $physical_device ]]
 }
 
 # ---------------------------------
@@ -425,10 +426,11 @@ unmap-drive() {
 # ---------------------------------
 
 park-disk-heads() {
-	local raw_device=$(basename $1)
+	local physical_device=$(basename $1)
 
-	raw_device=${raw_device%%[0-9]*}
-	$IfRun sudo bash -c "echo 1 > /sys/block/$raw_device/device/delete"
+	physical_device=${physical_device%%[0-9]*}
+	$IfRun \
+	sudo bash -c "echo 1 > /sys/block/$physical_device/device/delete"
 }
 
 # ----------------------
@@ -455,12 +457,12 @@ close() {
 
 	unmount-drive $mount_dir
 
-	set-raw_device--from-FS_label $FS_label
+	set-physical_device--from-FS_label $FS_label
 	unmap-drive $FS_label
 
-	[[ $action == close && $raw_device ]] || return
+	[[ $action == close && $physical_device ]] || return
 
-	park-disk-heads $raw_device && alert-smartd
+	park-disk-heads $physical_device && alert-smartd
 }
 
 # ----------------------------------------------------------------------------
