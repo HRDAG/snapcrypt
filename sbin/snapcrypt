@@ -211,9 +211,11 @@ init-device() {
 	    abort-function "cryptsetup returned $?; maybe repeat, after run:
 		sudo cryptsetup close $FS_label"
 
-	set-decrypted_device--as-open $FS_label $physical_device
+	set-decrypted_device--as-open $FS_label $physical_device; echo
+	set-FS_label2physical_dev--as-list-drives | fgrep -w $physical_device
 
 	set-serial_number $device ||abort "add rule to $udev_rules_file for $*"
+	echo
 	if grep -A1 "\b$serial_number\b" $udev_rules_file
 	   then warn "already have the above rule for $name"
 	   else print-rule $name $device | tee -a $udev_rules_file ||
