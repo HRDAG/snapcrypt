@@ -1,4 +1,4 @@
-# Used in open-backup .
-readonly drive_key_file=/etc/snapcrypt/keys/keyfile.bin
+readonly  drive_key_file=$config_dir/keys/keyfile.bin
+readonly udev_rules_file=$config_dir/drives.rules
 
 readonly log_dir=/var/log/snapcrypt

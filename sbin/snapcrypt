@@ -26,8 +26,7 @@ function set-config_file() {
 set-config_file $our_name || abort "can't find our (non-empty) configure.sh"
 readonly config_dir=$(dirname  $config_file)
 source  $config_file || abort "$config_file doesn't end with 'true'"
-readonly udev_rules_file=$config_dir/drives.rules
-[[  -s  $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
+[[ -s $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
 
 # common_mount_options, extN_mount_options, xfs_mount_options, drive_dir_prefix
 set-config_file snapback && source $config_file
@@ -218,10 +217,10 @@ init-device() {
 	set-serial_number $device ||abort "add rule to $udev_rules_file for $*"
 	echo
 	if grep -A1 "\b$serial_number\b" $udev_rules_file
-	   then warn "already have the above rule for $name"
+	   then warn "$udev_rules_file already has the above rule"
 	   else print-rule $name $device | tee -a $udev_rules_file ||
 		   abort "couldn't append the above rule to $udev_rules_file"
-		echo -e "\nJust added the above rule to $udev_rules_file"
+		echo -e "\nAdded the above rule to $udev_rules_file"
 	fi
 
 	local  rules_symlink=/etc/udev/rules.d/USB-backup-drives.rules
