@@ -400,7 +400,13 @@ open() {
 	done
 	[[ $do_mount_RO ]] && mount_options+=,ro
 	RunCmd sudo \
-	mount -t $FS_type -o $mount_options $decrypted_device $mount_dir
+	mount -t $FS_type -o $mount_options $decrypted_device $mount_dir ||
+	    return 1
+
+	[[ -t 1 ]] || return 0
+	echo
+	local df_fields=source,fstype,size,avail,used,pcent,iused,ipcent,target
+	df --block-size=G --output=$df_fields --no-sync $mount_dir
 }
 
 # ----------------------------------------------------------------------------
