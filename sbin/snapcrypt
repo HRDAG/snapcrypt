@@ -146,9 +146,12 @@ set-FS_label2physical_dev--as-list-drives() {
 		fi
 		[[ $FS_label ]] ||
 		set-FS_label--from-mount_dir $mount_dir
-		local  dev=/dev/mapper/$FS_label    dm=
-		[[ -b $dev ]] && set-absolute_path $dev &&
-		    dm="\t# mapped device is $dev -> $absolute_path"
+		local dev=/dev/mapper/$FS_label   path_msg=   dm=
+		if [[ -b $dev ]]
+		   then [[ -L $dev ]] && set-absolute_path $dev &&
+			    path_msg=" -> $absolute_path"
+			dm="\t# mapped device is $dev$path_msg"
+		fi
 
 		echo -e "$drive $physical_dev$dm"
 
