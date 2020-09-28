@@ -482,7 +482,7 @@ unmount-drive() {
 	echo "unmounting $mount_dir, can take minutes ..."
 
 	[[ $debug_opt ]] ||
-	    { snapback $our_opts umount $drive &> /dev/null && return; }
+	    { snapback $our_opts umount $mount_dir && return; }
 
 	is-an-FS-device-mounted $mount_dir || return
 
