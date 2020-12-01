@@ -118,6 +118,20 @@ function set-FS_label--from-LUKS-header() {
 
 # ----------------------
 
+function set-FS_label--from-lsblk() {
+	local physical_dev=$1
+
+	FS_label=
+	have-cmd lsblk || return 1
+	set -- $(lsblk --list --output name,type $physical_dev |
+		     # see snapback's allowed_drive_dir_chars=
+		     egrep '[-a-zA-Z0-9]+_.+ crypt$')
+	[[ $# != 0 ]] || return 1
+	FS_label=$1
+}
+
+# ----------------------
+
 declare -A FS_label2physical_dev
 
 set-FS_label2physical_dev--as-list-drives() {
@@ -129,6 +143,7 @@ set-FS_label2physical_dev--as-list-drives() {
 		sudo cryptsetup isLuks $physical_dev || continue
 
 		set-FS_label--from-LUKS-header $physical_dev ||
+		set-FS_label--from-lsblk       $physical_dev ||
 		set-serial_number $physical_dev ||
 		    { echo "? $physical_dev"; continue; }
 
