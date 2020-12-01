@@ -124,8 +124,7 @@ function set-FS_label--from-lsblk() {
 	FS_label=
 	have-cmd lsblk || return 1
 	set -- $(lsblk --list --output name,type $physical_dev |
-		     # see snapback's allowed_drive_dir_chars=
-		     egrep '[-a-zA-Z0-9]+_.+ crypt$')
+		     egrep '^[^ ]+ +crypt$')
 	[[ $# != 0 ]] || return 1
 	FS_label=$1
 }
