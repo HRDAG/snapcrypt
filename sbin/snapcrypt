@@ -135,7 +135,7 @@ declare -A FS_label2physical_dev
 
 set-FS_label2physical_dev--as-list-drives() {
 
-	local physical_dev
+	local physical_dev FS_label serial_number
 	for physical_dev in /dev/sd[a-z]*
 	    do	[[ -b $physical_dev ]] || continue
 
