@@ -393,7 +393,9 @@ open() {
 
 	set-mount_dir-FS_label--from-name $name
 	[[ $name == /dev/[^m]* && ! $device ]] && device=$name
-	[[ $device ]] || set-device--from-FS_label $FS_label
+	local map=/dev/mapper/$FS_label
+	[[ $device ]] || set-device--from-FS_label $FS_label ||
+	    abort "can't find device for label '$FS_label':\n$(ls -l $map)"
 	set-physical_device $device
 
 	is-an-FS-device-mounted $mount_dir && abort "$mount_dir has an FS"
