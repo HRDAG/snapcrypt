@@ -539,6 +539,7 @@ unmap-drive() {
 # ---------------------------------
 
 park-disk-heads() {
+	[[ -b $1 ]] || abort-function "$1 is not a block device"
 	local physical_device=$(basename $1)
 
 	physical_device=${physical_device%%[0-9]*}
