@@ -498,6 +498,7 @@ assert-drive-has-new-backups() {
 unmount-drive() {
 	local mount_dir=$1
 
+	[[ -d $mount_dir ]] || return
 	echo "unmounting $mount_dir, can take minutes ..."
 
 	[[ $debug_opt ]] ||
