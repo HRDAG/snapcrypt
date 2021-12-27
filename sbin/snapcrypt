@@ -264,7 +264,10 @@ open-all-unopened-drives() {
 set-mount_dir-FS_label--from-device() {
 	local device=$1
 
-	set-FS_label--from-LUKS-header $device &&
+	if [[ $device == /dev/mapper/* ]]
+	   then FS_label=$(basename $device)
+	   else	set-FS_label--from-LUKS-header $device
+	fi &&
 	set-mount_dir--from-FS-label $FS_label &&
 	    return
 
@@ -294,7 +297,8 @@ set-mount_dir-FS_label--from-name() {
 
 	if [[ $name == /* ]]
 	   then mount_dir=$name
-	   else mount_dir=$(snapback drive $name 2>/dev/null)
+	   else mount_dir=$(snapback drive $name 2>/dev/null) ||
+		   abort "'$name' is not a valid drive name"
 	fi
 	if [[ $mount_dir ]]
 	   then set-FS_label--from-mount_dir $mount_dir
@@ -458,7 +462,8 @@ set-mount_dir-mapped_dev-FS_label() {
 		mapped_dev=/dev/mapper/$name
 		if [[ ! -b $mapped_dev ]]
 		   then mapped_dev=
-			mount_dir=$(snapback drive $name)
+			mount_dir=$(snapback drive $name) ||
+			    abort "'$name' is not a valid drive name"
 		fi ;;
 	esac
 
