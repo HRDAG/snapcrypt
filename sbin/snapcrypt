@@ -61,6 +61,8 @@ Usage: $our_name [options] action [args]
 	 Use -f to close even without any good snapshots (e.g. maintenance).
 	 'eject' is a synonym for 'close'.
 
+     map {name|device}: map device but don't try to mount its filesystem
+
      unmap [-f] {mapping|mount|max}: like 'close', but don't detach.
 
      Common options:
@@ -637,8 +639,12 @@ case $action in
 	[[ $# == 2 ]] || abort-with-action-Usage
 	print-rule "$@"
 	;;
-   # open [-r|-M] {name|mount [device] | all}: run 'cryptsetup open' on device,
-    ( o* ) undo_action_abbrev open
+    # map {name|mount [device] | all}: run 'cryptsetup open' but don't mount.
+    ( m* ) undo_action_abbrev map
+	set -- -M "$@"
+	;&				# fall through to open ...
+    # open [-r|-M] {name|mount [device] | all}: run 'cryptsetup open' on device
+    ( o* ) [[ $action == o* ]] && undo_action_abbrev open # map falls through
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
 	if [[ $* == all ]]
