@@ -48,7 +48,7 @@ Usage: $our_name [options] action [args]
 
      rule name device: print a udevd rule to use to call this command.
 
-     open [-r|-M] {name|mount [device] | all}: run 'cryptsetup open' on device,
+     open [-r|-M] {name|mount [device] | all}: decrypt & mount device device.
 	specifying a name (e.g. FS_label) or mount-dir; then mount
 	the decrypted mapping device.  If mount is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
@@ -61,7 +61,7 @@ Usage: $our_name [options] action [args]
 	 Use -f to close even without any good snapshots (e.g. maintenance).
 	 'eject' is a synonym for 'close'.
 
-     map {name|device}: map device but don't try to mount its filesystem
+     map {name|mount [device] | all}: decrypt device (i.e. setup mapping) only
 
      unmap [-f] {mapping|mount|max}: like 'close', but don't detach.
 
@@ -196,14 +196,14 @@ function set-device--from-FS_label() {
 readonly rule_format='
 # udev puts the basename of the physical-device (which matched KERNEL) into %%k
 ACTION=="add", KERNEL=="sd*[!0-9]", ATTRS{serial}=="%s", \
-   RUN+="/usr/local/sbin/snapcrypt %s %%k'
+   RUN+="/usr/local/sbin/snapcrypt -t open %s %%k &"'
 
 print-rule() {
 	local name=$1 device=$2
 
 	set-serial_number $device
 	local rule
-	printf -v rule "$rule_format" $serial_number $name
+	printf -v rule "$rule_format" "$serial_number" $name
 	echo "$rule"
 }
 
@@ -635,15 +635,15 @@ case $action in
 	init-device "$@"
 	;;
    # rule name device: print a udevd rule to use to call this command.
-   ( r* ) undo_action_abbrev rule
+   ( r* | p*r* ) undo_action_abbrev rule
 	[[ $# == 2 ]] || abort-with-action-Usage
 	print-rule "$@"
 	;;
-    # map {name|mount [device] | all}: run 'cryptsetup open' but don't mount.
+    # map {name|mount [device] | all}: decrypt device (i.e. setup mapping) only
     ( m* ) undo_action_abbrev map
 	set -- -M "$@"
 	;&				# fall through to open ...
-    # open [-r|-M] {name|mount [device] | all}: run 'cryptsetup open' on device
+    # open [-r|-M] {name|mount [device] | all}: decrypt & mount device device.
     ( o* ) [[ $action == o* ]] && undo_action_abbrev open # map falls through
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
