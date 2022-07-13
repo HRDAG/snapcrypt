@@ -109,8 +109,10 @@ function set-serial_number() {
 
 # ----------------------
 
-set-FS_label--from-mount_dir ${drive_dir_prefix-} # have snapback?
-readonly FS_label_prefix=$FS_label
+if [[ ${drive_dir_prefix-} ]]
+   then set-FS_label--from-mount_dir ${drive_dir_prefix-} # have snapback?
+	readonly FS_label_prefix=$FS_label
+fi
 
 function set-FS_label--from-LUKS-header() {
 	local physical_dev=$1
