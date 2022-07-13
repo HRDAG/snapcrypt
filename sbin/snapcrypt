@@ -23,7 +23,7 @@ function set-config_file() {
 	return 1
 }
 
-set-config_file $our_name || abort "can't find our (non-empty) configure.sh"
+set-config_file $our_name || warn "can't find our (non-empty) configure.sh"
 readonly config_dir=$(dirname  $config_file)
 if source $config_file
    then [[ -s $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
@@ -651,6 +651,7 @@ case $action in
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
 	[[ ${1-} = -k ]] && { drive_key_file=$2; shift 2; }
+	[[ ${drive_key_file-} ]] || abort "need -k"
 	if [[ $* == all ]]
 	   then open-all-unopened-drives
 	elif [[ $# == [12] ]]
