@@ -25,8 +25,10 @@ function set-config_file() {
 
 set-config_file $our_name || abort "can't find our (non-empty) configure.sh"
 readonly config_dir=$(dirname  $config_file)
-source  $config_file || abort "$config_file doesn't end with 'true'"
-[[ -s $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
+if source $config_file
+   then [[ -s $udev_rules_file ]] || abort "need non-empty $udev_rules_file"
+   else warn "couldn't source $config_file, use -k with 'open'"
+fi
 
 # common_mount_options, extN_mount_options, xfs_mount_options, drive_dir_prefix
 set-config_file snapback && source $config_file
@@ -48,12 +50,13 @@ Usage: $our_name [options] action [args]
 
      rule name device: print a udevd rule to use to call this command.
 
-     open [-r|-M] {name|mount [device] | all}: decrypt & mount device device.
+     open [-r|-M] [-k keypair] {name|mount [device] | all}: decrypt & mount
 	specifying a name (e.g. FS_label) or mount-dir; then mount
 	the decrypted mapping device.  If mount is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
 	a udev rule in $udev_rules_file .]
 	Use -r to mount readonly, or -M to not mount.
+	Use -k if you don't have $config_file
 
      close [-f] {mapping|mount|max}: unmap drive (cryptsetup close) & detach.
          If mount is not an absolute path, call 'snapback' to figure out
@@ -647,6 +650,7 @@ case $action in
     ( o* ) [[ $action == o* ]] && undo_action_abbrev open # map falls through
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
+	[[ ${1-} = -k ]] && { drive_key_file=$2; shift 2; }
 	if [[ $* == all ]]
 	   then open-all-unopened-drives
 	elif [[ $# == [12] ]]
