@@ -50,7 +50,7 @@ Usage: $our_name [options] action [args]
 
      rule name device: print a udevd rule to use to call this command.
 
-     open [-r|-M] [-k keypair] {name|mount [device] | all}: decrypt & mount
+     open [-r|-M] {name | mount [device] | all}: decrypt & mount device,
 	specifying a name (e.g. FS_label) or mount-dir; then mount
 	the decrypted mapping device.  If mount is not an absolute path,
 	call 'snapback' to get the mount-dir.  [This action is run from
@@ -613,11 +613,11 @@ show-status() {
 action=$1; shift
 _our_name="$our_name"
  our_name="$our_name $action"
-undo_action_abbrev() { action=$1 our_name="$_our_name $1" ; }
+undo-action-abbrev() { action=$1 our_name="$_our_name $1" ; }
 
 # ---------------------------------
 
-process_action() {
+process-action() {
 
 stack_frame_to_show=0		# show line-number inside the 'case' statement
 
@@ -625,11 +625,11 @@ $Trace
 
 case $action in
    # list-drives: show all encrypted drives.
-   ( l*s* ) undo_action_abbrev list-drives # ls
+   ( l*s* ) undo-action-abbrev list-drives # ls
 	set-FS_label2physical_dev--as-list-drives "$@"
 	;;
    # status { name(s) | 'all' }: show detailed status of encrypted drive(s).
-   ( s* ) undo_action_abbrev status
+   ( s* ) undo-action-abbrev status
 	[[ $# != 0 ]] || abort-with-action-Usage
 	show-status "$@"
 	;;
@@ -640,16 +640,16 @@ case $action in
 	init-device "$@"
 	;;
    # rule name device: print a udevd rule to use to call this command.
-   ( r* | p*r* ) undo_action_abbrev rule
+   ( r* | p*r* ) undo-action-abbrev rule
 	[[ $# == 2 ]] || abort-with-action-Usage
 	print-rule "$@"
 	;;
     # map {name|mount [device] | all}: decrypt device (i.e. setup mapping) only
-    ( m* ) undo_action_abbrev map
+    ( m* ) undo-action-abbrev map
 	set -- -M "$@"
 	;&				# fall through to open ...
-    # open [-r|-M] {name|mount [device] | all}: decrypt & mount device device.
-    ( o* ) [[ $action == o* ]] && undo_action_abbrev open # map falls through
+    # open [-r|-M] {name | mount [device] | all}: decrypt & mount device.
+    ( o* ) [[ $action == o* ]] && undo-action-abbrev open # map falls through
 	[[ ${1-} = -r ]] && { shift; do_mount_RO=$true; } || do_mount_RO=$false
 	[[ ${1-} = -M ]] && { shift; do_mount=$false  ; } || do_mount=$true
 	[[ ${1-} = -k ]] && { drive_key_file=$2; shift 2; }
@@ -665,8 +665,8 @@ case $action in
     # unmap [-f] {mapping|mount|max}: like 'close', but don't detach.
     ( c* | u* )
 	if [[ $action == c* ]]
-	   then undo_action_abbrev close
-	   else undo_action_abbrev unmap
+	   then undo-action-abbrev close
+	   else undo-action-abbrev unmap
 	fi
 	[[ ${1-} == -f ]] && { shift; do_force=$true; } || do_force=$false
 	if [[ $* == all ]]
@@ -682,4 +682,4 @@ case $action in
 esac
 }
 
-process_action "$@"
+process-action "$@"
