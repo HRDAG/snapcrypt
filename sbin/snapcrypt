@@ -258,11 +258,11 @@ init-device() {
 
 open-all-unopened-drives() {
 
+	local name encrypted_dev pound mapped device is mapped_dev
 	$our_path list-drives |
-	while read drive_name raw_dev coment
-	   do	df --output=target --no-sync -x devtmpfs -x tmpfs |
-		   grep -q "${drive_dir_prefix-\b}$drive_name$" && continue
-		$_our_name $our_opts open $dev $drive_name
+	while read name encrypted_dev pound mapped device is mapped_dev junk
+	   do	is-an-FS-device-mounted "$map_dev" && continue
+		$_our_name $our_opts open $name $encrypted_dev
 	done
 }
 
