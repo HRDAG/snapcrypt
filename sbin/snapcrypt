@@ -95,6 +95,9 @@ readonly tmp=$tmp_dir/$our_name-$$
 
 need-cmds cryptsetup fuser
 
+# so 'wait' not connfused
+shopt -s lastpipe			# don't fork last cmd of pipeline
+
 ##############################################################################
 # functions
 ##############################################################################
@@ -452,8 +455,9 @@ close-all-opened-drives() {
 	df --output=target --no-sync -x devtmpfs -x tmpfs |
 	   grep "^$drive_dir_prefix" |
 	while read mount_point
-	   do	$_our_name $our_opts close -q $mount_point
+	   do	$_our_name $our_opts close -q $mount_point &
 	done
+	wait
 }
 
 # ----------------------------------------------------------------------------
