@@ -262,8 +262,9 @@ open-all-unopened-drives() {
 	$our_path list-drives |
 	while read name encrypted_dev pound mapped device is mapped_dev junk
 	   do	is-an-FS-device-mounted "$mapped_dev" && continue
-		$_our_name $our_opts open $name $encrypted_dev
+		$_our_name $our_opts open $name $encrypted_dev &
 	done
+	wait
 }
 
 # ------------------------------------------------------------------
