@@ -265,9 +265,11 @@ open-all-unopened-drives() {
 	$our_path list-drives |
 	while read name encrypted_dev pound mapped device is mapped_dev junk
 	   do	is-an-FS-device-mounted "$mapped_dev" && continue
-		$_our_name $our_opts open $name $encrypted_dev &
+		$_our_name $our_opts open $name $encrypted_dev | cat &
 	done
 	wait
+	set-FS_label2physical_dev--as-list-drives
+	have-cmd snapback && snapback df
 }
 
 # ------------------------------------------------------------------
@@ -455,7 +457,7 @@ close-all-opened-drives() {
 	df --output=target --no-sync -x devtmpfs -x tmpfs |
 	   grep "^$drive_dir_prefix" |
 	while read mount_point
-	   do	$_our_name $our_opts close -q $mount_point &
+	   do	$_our_name $our_opts close -q $mount_point | cat &
 	done
 	wait
 }
